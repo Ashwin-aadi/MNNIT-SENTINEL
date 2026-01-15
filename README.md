@@ -1,16 +1,31 @@
-# messmaker_fresh
+# MNNIT-SENTINEL
 
-A new Flutter project.
+MNNIT SENTINEL is a Flutter-based application that uses **geofencing** to automate manual tasks such as hostel entry logging and attendance.
 
-## Getting Started
+## 🚀 Features
 
-This project is a starting point for a Flutter application.
+- 📍 **Geofencing-based attendance & hostel entry**
+- 🤖 **Machine learning** to detect pattern changes and recognize safety hazards
+- 🍽️ **Mess tracker**
+- 🔐 **Digital locker**
+- 📚 **Library integration**
+- 🔔 Smart notifications and alerts
 
-A few resources to get you started if this is your first Flutter project:
+## 🛠️ Tech Stack
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+- **Flutter** (Frontend)
+- **Dart**
+- **Android / iOS / Web / Desktop support**
+- **Machine Learning (planned / integrated modules)**
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## 📦 Getting Started
+
+### Prerequisites
+- Flutter SDK installed
+- Android Studio / VS Code
+- Emulator or physical device
+
+### Run the project
+```bash
+flutter pub get
+flutter run
