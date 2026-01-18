@@ -13,7 +13,9 @@ import 'package:device_info_plus/device_info_plus.dart';
 import 'welcome_page.dart';
 import 'signup_page.dart';
 import 'check_email_page.dart';
-import 'get_started_page.dart'; // ✅ make sure this file exists
+import 'get_started_page.dart';
+import 'sign_in_page.dart';
+import 'auth_gate.dart';
 
 /// =======================
 /// GLOBAL STATE (UI ISOLATE)
@@ -101,13 +103,10 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'MNNIT-SENTINEL',
       debugShowCheckedModeBanner: false,
-      initialRoute: '/',
+      home: AuthGate(),
       routes: {
-        '/': (_) => const WelcomePage(),
+        '/signin': (_) => const SignInPage(),
         '/signup': (_) => const SignUpPage(),
-        '/check-email': (_) => CheckEmailPage(),
-        '/get-started': (_) => const GetStartedPage(),
-        '/home': (_) => const HomePage(),
       },
     );
   }
@@ -142,7 +141,18 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('MNNIT-SENTINEL')),
+      appBar: AppBar(
+        title: const Text('MNNIT-SENTINEL'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: () async {
+              await FirebaseAuth.instance.signOut();
+              // AuthGate will handle navigation
+            },
+          ),
+        ],
+      ),
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -226,8 +236,8 @@ class GeoTaskHandler extends TaskHandler {
   int _remaining = ALERT_TIMEOUT_SECONDS;
   bool _verified = false;
 
-  static const double lat = 26.1957202;
-  static const double lng = 78.1478179;
+  static const double lat = 25.4904908;
+  static const double lng = 81.8632980;
   static const double radius = 10.0;
 
   @override

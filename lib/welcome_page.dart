@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'sign_in_page.dart';
+
 
 class WelcomePage extends StatelessWidget {
   const WelcomePage({super.key});
@@ -63,7 +65,9 @@ class WelcomePage extends StatelessWidget {
                   children: [
                     Expanded(
                       child: ElevatedButton(
-                        onPressed: () => _goToHome(context),
+                        onPressed: () {
+                          Navigator.pushNamed(context, '/signin');
+                        },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF2E3A8C),
                           foregroundColor: Colors.white,
