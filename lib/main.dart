@@ -148,7 +148,6 @@ class _HomePageState extends State<HomePage> {
             icon: const Icon(Icons.logout),
             onPressed: () async {
               await FirebaseAuth.instance.signOut();
-              // AuthGate will handle navigation
             },
           ),
         ],
@@ -233,8 +232,8 @@ void _startCallback() {
 class GeoTaskHandler extends TaskHandler {
   bool? _inside;
   Timer? _timer;
-  int _remaining = ALERT_TIMEOUT_SECONDS;
   bool _verified = false;
+  int? _eventTimestamp;
 
   static const double lat = 25.4904908;
   static const double lng = 81.8632980;
@@ -259,7 +258,6 @@ class GeoTaskHandler extends TaskHandler {
     if (data is Map && data['type'] == 'VERIFIED') {
       _verified = true;
       _timer?.cancel();
-      _timer = null;
 
       FlutterForegroundTask.updateService(
         notificationTitle: 'Geofence Status',
@@ -285,26 +283,29 @@ class GeoTaskHandler extends TaskHandler {
 
     _verified = false;
     _timer?.cancel();
-    _remaining = ALERT_TIMEOUT_SECONDS;
+    _eventTimestamp = DateTime.now().millisecondsSinceEpoch;
 
     FlutterForegroundTask.sendDataToMain({
       'type': 'STATUS',
       'status': status,
-      'timestamp': DateTime.now().millisecondsSinceEpoch,
+      'timestamp': _eventTimestamp,
     });
 
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) async {
-      _remaining--;
-
       if (_verified) {
         timer.cancel();
         return;
       }
 
-      if (_remaining > 0) {
+      final elapsed =
+          (DateTime.now().millisecondsSinceEpoch - _eventTimestamp!) ~/ 1000;
+
+      final remaining = ALERT_TIMEOUT_SECONDS - elapsed;
+
+      if (remaining > 0) {
         FlutterForegroundTask.updateService(
           notificationTitle: 'Geofence Status',
-          notificationText: '$status | Verify in $_remaining sec',
+          notificationText: '$status | Verify in $remaining sec',
         );
       } else {
         timer.cancel();
@@ -316,6 +317,11 @@ class GeoTaskHandler extends TaskHandler {
           'timestamp': FieldValue.serverTimestamp(),
           'verified': false,
         });
+
+        FlutterForegroundTask.updateService(
+          notificationTitle: 'Geofence Status',
+          notificationText: 'Verification failed',
+        );
       }
     });
   }
