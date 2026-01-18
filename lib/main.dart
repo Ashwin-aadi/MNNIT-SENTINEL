@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
@@ -8,6 +9,10 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:device_info_plus/device_info_plus.dart';
+
+import 'welcome_page.dart';
+import 'signup_page.dart';
+import 'check_email_page.dart';
 
 /// =======================
 /// GLOBAL STATE (UI ISOLATE)
@@ -39,6 +44,11 @@ Future<String> getDeviceId() async {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
+
+  /// 🔐 Required for email-link sign in
+  FirebaseAuth.instance.isSignInWithEmailLink(
+    Uri.base.toString(),
+  );
 
   const androidInit =
   AndroidInitializationSettings('@mipmap/ic_launcher');
@@ -85,22 +95,32 @@ void main() async {
 }
 
 /// =======================
-/// APP UI
+/// APP ROOT
 /// =======================
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
+    return MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: HomePage(),
+      initialRoute: '/',
+      routes: {
+        '/': (_) => const WelcomePage(),
+        '/signup': (_) => const SignUpPage(),
+        '/check-email': (_) => const CheckEmailPage(),
+        '/home': (_) => HomePage(),
+      },
     );
   }
 }
 
+/// =======================
+/// HOME PAGE
+/// =======================
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
+
   @override
   State<HomePage> createState() => _HomePageState();
 }
@@ -134,7 +154,9 @@ class _HomePageState extends State<HomePage> {
               builder: (_, value, __) => Text(
                 value,
                 style: const TextStyle(
-                    fontSize: 18, fontWeight: FontWeight.bold),
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
             const SizedBox(height: 30),
@@ -184,9 +206,7 @@ class _HomePageState extends State<HomePage> {
       'verified': true,
     });
 
-    /// 🔥 STOP TIMER IN BACKGROUND
     FlutterForegroundTask.sendDataToTask({'type': 'VERIFIED'});
-
     geofenceStatus.value = 'Registered: $_pendingStatus';
   }
 }
