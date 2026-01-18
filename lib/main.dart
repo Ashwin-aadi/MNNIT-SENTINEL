@@ -13,6 +13,7 @@ import 'package:device_info_plus/device_info_plus.dart';
 import 'welcome_page.dart';
 import 'signup_page.dart';
 import 'check_email_page.dart';
+import 'get_started_page.dart'; // ✅ make sure this file exists
 
 /// =======================
 /// GLOBAL STATE (UI ISOLATE)
@@ -38,17 +39,12 @@ Future<String> getDeviceId() async {
 }
 
 /// =======================
-/// MAIN (UI ISOLATE)
+/// MAIN
 /// =======================
 @pragma('vm:entry-point')
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
-
-  /// 🔐 Required for email-link sign in
-  FirebaseAuth.instance.isSignInWithEmailLink(
-    Uri.base.toString(),
-  );
 
   const androidInit =
   AndroidInitializationSettings('@mipmap/ic_launcher');
@@ -103,13 +99,15 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      title: 'MNNIT-SENTINEL',
       debugShowCheckedModeBanner: false,
       initialRoute: '/',
       routes: {
         '/': (_) => const WelcomePage(),
         '/signup': (_) => const SignUpPage(),
-        '/check-email': (_) => const CheckEmailPage(),
-        '/home': (_) => HomePage(),
+        '/check-email': (_) => CheckEmailPage(),
+        '/get-started': (_) => const GetStartedPage(),
+        '/home': (_) => const HomePage(),
       },
     );
   }
@@ -144,7 +142,7 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Geofence App')),
+      appBar: AppBar(title: const Text('MNNIT-SENTINEL')),
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -300,12 +298,6 @@ class GeoTaskHandler extends TaskHandler {
         );
       } else {
         timer.cancel();
-        if (_verified) return;
-
-        FlutterForegroundTask.updateService(
-          notificationTitle: 'Geofence Status',
-          notificationText: 'Verification failed',
-        );
 
         final deviceId = await getDeviceId();
         await FirebaseFirestore.instance.collection('alerts').add({

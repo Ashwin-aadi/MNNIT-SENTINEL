@@ -1,44 +1,67 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
-class CheckEmailPage extends StatelessWidget {
+class CheckEmailPage extends StatefulWidget {
   const CheckEmailPage({super.key});
 
-  Future<void> _refresh(BuildContext context) async {
-    final user = FirebaseAuth.instance.currentUser;
-    await user?.reload();
+  @override
+  State<CheckEmailPage> createState() => _CheckEmailPageState();
+}
 
-    if (user != null && user.emailVerified) {
-      Navigator.pushReplacementNamed(context, '/home');
+class _CheckEmailPageState extends State<CheckEmailPage> {
+  bool _loading = false;
+
+  Future<void> _checkVerification() async {
+    setState(() => _loading = true);
+
+    final user = FirebaseAuth.instance.currentUser;
+
+    if (user == null) {
+      setState(() => _loading = false);
+      return;
     }
+
+    await user.reload();
+    final refreshedUser = FirebaseAuth.instance.currentUser;
+
+    if (refreshedUser != null && refreshedUser.emailVerified) {
+      /// ✅ VERIFIED → GetStarted
+      Navigator.pushReplacementNamed(context, '/get-started');
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Email not verified yet. Check inbox or spam.'),
+        ),
+      );
+    }
+
+    setState(() => _loading = false);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Text(
-                'Verify your email',
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'A verification link has been sent to your email.\n'
-                    'Please verify to continue.',
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 24),
-              ElevatedButton(
-                onPressed: () => _refresh(context),
-                child: const Text('I have verified'),
-              ),
-            ],
-          ),
+      appBar: AppBar(title: const Text('Verify Email')),
+      body: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.mark_email_read, size: 80),
+            const SizedBox(height: 20),
+            const Text(
+              'We’ve sent a verification email.\nPlease verify and come back.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 16),
+            ),
+            const SizedBox(height: 30),
+            ElevatedButton(
+              onPressed: _loading ? null : _checkVerification,
+              child: _loading
+                  ? const CircularProgressIndicator()
+                  : const Text('I have verified'),
+            ),
+          ],
         ),
       ),
     );
