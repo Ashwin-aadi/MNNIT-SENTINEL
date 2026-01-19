@@ -107,7 +107,10 @@ class MyApp extends StatelessWidget {
       routes: {
         '/signin': (_) => const SignInPage(),
         '/signup': (_) => const SignUpPage(),
+        '/check-email': (_) => const CheckEmailPage(),
+        '/get-started': (_) => const GetStartedPage(),
       },
+
     );
   }
 }

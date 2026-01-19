@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'auth_gate.dart';
 
 class GetStartedPage extends StatefulWidget {
   const GetStartedPage({super.key});
@@ -22,7 +25,7 @@ class _GetStartedPageState extends State<GetStartedPage> {
 
   bool _loading = false;
 
-  final user = FirebaseAuth.instance.currentUser!;
+  User get user => FirebaseAuth.instance.currentUser!;
 
   @override
   void dispose() {
@@ -34,9 +37,10 @@ class _GetStartedPageState extends State<GetStartedPage> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+
     if (_gender == null || _branch == null || _semester == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select all dropdowns')),
+        const SnackBar(content: Text('Please fill all fields')),
       );
       return;
     }
@@ -54,142 +58,84 @@ class _GetStartedPageState extends State<GetStartedPage> {
       'createdAt': FieldValue.serverTimestamp(),
     });
 
-    Navigator.pushReplacementNamed(context, '/home');
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('onboarding_done', true);
+
+    if (!mounted) return;
+
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => const AuthGate()),
+          (_) => false,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Stack(
-        children: [
-          /// Background
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topRight,
-                end: Alignment.bottomLeft,
-                colors: [
-                  Color(0xFF8E9AEF),
-                  Color(0xFF6A7FDB),
-                  Color(0xFF4F5BD5),
-                ],
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            children: [
+              const SizedBox(height: 40),
+              const Text(
+                'Get Started',
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
               ),
-            ),
-          ),
+              const SizedBox(height: 24),
 
-          /// White Card
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: Container(
-              height: MediaQuery.of(context).size.height * 0.8,
-              padding: const EdgeInsets.all(24),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(40)),
+              _field(_nameController, 'Full Name'),
+              _field(null, user.email!, enabled: false),
+              _field(_regController, 'Registration Number'),
+
+              _dropdown(
+                hint: 'Gender',
+                value: _gender,
+                items: const ['Male', 'Female', 'Other'],
+                onChanged: (v) => setState(() => _gender = v),
               ),
-              child: SingleChildScrollView(
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    children: [
-                      const Text(
-                        'Get Started !!',
-                        style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF4F5BD5),
-                        ),
-                      ),
-                      const SizedBox(height: 24),
 
-                      _buildField(
-                        controller: _nameController,
-                        hint: 'Full Name',
-                      ),
+              _dropdown(
+                hint: 'Branch',
+                value: _branch,
+                items: const ['CSE', 'IT', 'ECE', 'EE', 'ME', 'CE', 'BT'],
+                onChanged: (v) => setState(() => _branch = v),
+              ),
 
-                      _buildField(
-                        hint: user.email!,
-                        enabled: false,
-                      ),
+              _dropdown(
+                hint: 'Semester',
+                value: _semester,
+                items: const ['1', '2', '3', '4', '5', '6', '7', '8'],
+                onChanged: (v) => setState(() => _semester = v),
+              ),
 
-                      _buildField(
-                        controller: _regController,
-                        hint: 'Registration Number',
-                      ),
+              _field(_sectionController, 'Section'),
 
-                      _dropdown(
-                        hint: 'Gender',
-                        value: _gender,
-                        items: ['Male', 'Female', 'Other'],
-                        onChanged: (v) => setState(() => _gender = v),
-                      ),
+              const SizedBox(height: 24),
 
-                      _dropdown(
-                        hint: 'Branch',
-                        value: _branch,
-                        items: [
-                          'CSE',
-                          'IT',
-                          'ECE',
-                          'EE',
-                          'ME',
-                          'CE',
-                          'BT',
-                        ],
-                        onChanged: (v) => setState(() => _branch = v),
-                      ),
-
-                      _dropdown(
-                        hint: 'Semester',
-                        value: _semester,
-                        items: [
-                          '1','2','3','4','5','6','7','8'
-                        ],
-                        onChanged: (v) => setState(() => _semester = v),
-                      ),
-
-                      _buildField(
-                        controller: _sectionController,
-                        hint: 'Section',
-                      ),
-
-                      const SizedBox(height: 24),
-
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: _loading ? null : _submit,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF8ECae6),
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          child: _loading
-                              ? const CircularProgressIndicator(color: Colors.white)
-                              : const Text(
-                            'Continue',
-                            style: TextStyle(color: Colors.white),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _loading ? null : _submit,
+                  child: _loading
+                      ? const CircularProgressIndicator()
+                      : const Text('Continue'),
                 ),
               ),
-            ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
 
-  Widget _buildField({
-    TextEditingController? controller,
-    required String hint,
-    bool enabled = true,
-  }) {
+  Widget _field(
+      TextEditingController? controller,
+      String hint, {
+        bool enabled = true,
+      }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: TextFormField(
@@ -200,12 +146,7 @@ class _GetStartedPageState extends State<GetStartedPage> {
             : null,
         decoration: InputDecoration(
           hintText: hint,
-          filled: true,
-          fillColor: const Color(0xFFF2F3F7),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide.none,
-          ),
+          border: const OutlineInputBorder(),
         ),
       ),
     );
@@ -215,7 +156,7 @@ class _GetStartedPageState extends State<GetStartedPage> {
     required String hint,
     required String? value,
     required List<String> items,
-    required Function(String?) onChanged,
+    required ValueChanged<String?> onChanged,
   }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
@@ -223,17 +164,17 @@ class _GetStartedPageState extends State<GetStartedPage> {
         value: value,
         hint: Text(hint),
         items: items
-            .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+            .map(
+              (e) => DropdownMenuItem<String>(
+            value: e,
+            child: Text(e),
+          ),
+        )
             .toList(),
         onChanged: onChanged,
         validator: (v) => v == null ? 'Required' : null,
-        decoration: InputDecoration(
-          filled: true,
-          fillColor: const Color(0xFFF2F3F7),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide.none,
-          ),
+        decoration: const InputDecoration(
+          border: OutlineInputBorder(),
         ),
       ),
     );
