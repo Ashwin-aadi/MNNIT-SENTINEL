@@ -28,7 +28,7 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
-        android:label="messmaker_fresh"
+        android:label="MNNIT SENTINEL"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
 
