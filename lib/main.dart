@@ -31,22 +31,13 @@ final FlutterLocalNotificationsPlugin _localNotifications =
 FlutterLocalNotificationsPlugin();
 
 /// =======================
-/// AUTH UID HELPERS
+/// UID HELPERS
 /// =======================
-String getCurrentUid() {
-  final user = FirebaseAuth.instance.currentUser;
-  if (user == null) {
-    throw Exception('User not authenticated');
-  }
-  return user.uid;
-}
-
 Future<void> persistUid() async {
-  final prefs = await SharedPreferences.getInstance();
   final user = FirebaseAuth.instance.currentUser;
-  if (user != null) {
-    await prefs.setString('uid', user.uid);
-  }
+  if (user == null) return;
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setString('uid', user.uid);
 }
 
 Future<String?> getStoredUid() async {
@@ -73,13 +64,10 @@ void main() async {
   FlutterForegroundTask.addTaskDataCallback((data) async {
     if (data is Map && data['type'] == 'STATUS') {
       final prefs = await SharedPreferences.getInstance();
-
       _pendingStatus = data['status'];
       _pendingTimestamp = data['timestamp'];
-
       await prefs.setString('pending_status', _pendingStatus!);
       await prefs.setInt('pending_timestamp', _pendingTimestamp!);
-
       geofenceStatus.value = _pendingStatus!;
     }
   });
@@ -144,7 +132,7 @@ class _HomePageState extends State<HomePage> {
     super.initState();
     FlutterForegroundTask.initCommunicationPort();
     _restorePending();
-    persistUid(); // 🔐 store UID for background isolate
+    persistUid();
   }
 
   Future<void> _restorePending() async {
@@ -221,15 +209,15 @@ class _HomePageState extends State<HomePage> {
     );
     if (!ok) return;
 
-    final uid = getCurrentUid();
+    final uid = FirebaseAuth.instance.currentUser!.uid;
 
     await FirebaseFirestore.instance
-        .collection('geofence_events')
-        .add({
-      'uid': uid,
-      'status': _pendingStatus,
-      'timestamp': FieldValue.serverTimestamp(),
-      'verified': true,
+        .collection('users')
+        .doc(uid)
+        .update({
+      'geofenceStatus': _pendingStatus,
+      'geofenceVerified': true,
+      'geofenceUpdatedAt': FieldValue.serverTimestamp(),
     });
 
     FlutterForegroundTask.sendDataToTask({'type': 'VERIFIED'});
@@ -277,7 +265,6 @@ class GeoTaskHandler extends TaskHandler {
     if (data is Map && data['type'] == 'VERIFIED') {
       _verified = true;
       _timer?.cancel();
-
       FlutterForegroundTask.updateService(
         notificationTitle: 'Geofence Status',
         notificationText: 'Verified successfully',
@@ -334,12 +321,24 @@ class GeoTaskHandler extends TaskHandler {
         final uid = await getStoredUid();
         if (uid == null) return;
 
-        await FirebaseFirestore.instance.collection('alerts').add({
-          'uid': uid,
-          'status': status,
-          'timestamp': FieldValue.serverTimestamp(),
-          'verified': false,
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(uid)
+            .update({
+          // live state
+          'geofenceStatus': status,
+          'geofenceVerified': false,
+          'geofenceUpdatedAt': DateTime.now().toIso8601String(),
+
+          // permanent log (SAFE)
+          'geofenceFailures': FieldValue.arrayUnion([
+            {
+              'status': status,
+              'failedAt': DateTime.now().toIso8601String(),
+            }
+          ]),
         });
+
 
         FlutterForegroundTask.updateService(
           notificationTitle: 'Geofence Status',
