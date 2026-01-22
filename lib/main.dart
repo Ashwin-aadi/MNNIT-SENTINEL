@@ -8,6 +8,7 @@ import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import 'signup_page.dart';
 import 'check_email_page.dart';
@@ -15,9 +16,6 @@ import 'get_started_page.dart';
 import 'sign_in_page.dart';
 import 'auth_gate.dart';
 
-/// =======================
-/// GLOBAL STATE (UI ISOLATE)
-/// =======================
 ValueNotifier<String> geofenceStatus =
 ValueNotifier<String>('Status: Unknown');
 
@@ -29,9 +27,6 @@ const int ALERT_TIMEOUT_SECONDS = 30;
 final FlutterLocalNotificationsPlugin _localNotifications =
 FlutterLocalNotificationsPlugin();
 
-/// =======================
-/// UID STORAGE (BG ISOLATE)
-/// =======================
 Future<void> persistUid() async {
   final user = FirebaseAuth.instance.currentUser;
   if (user == null) return;
@@ -44,9 +39,19 @@ Future<String?> getStoredUid() async {
   return prefs.getString('uid');
 }
 
-/// =======================
-/// MAIN
-/// =======================
+Future<void> requestCorePermissions() async {
+  final location = await Permission.location.request();
+  if (!location.isGranted) return;
+
+  if (await Permission.locationAlways.isDenied) {
+    await Permission.locationAlways.request();
+  }
+
+  if (await Permission.notification.isDenied) {
+    await Permission.notification.request();
+  }
+}
+
 @pragma('vm:entry-point')
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -93,9 +98,6 @@ void main() async {
   runApp(const MyApp());
 }
 
-/// =======================
-/// APP ROOT
-/// =======================
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
@@ -115,9 +117,6 @@ class MyApp extends StatelessWidget {
   }
 }
 
-/// =======================
-/// HOME PAGE
-/// =======================
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -129,6 +128,11 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      requestCorePermissions();
+    });
+
     FlutterForegroundTask.initCommunicationPort();
     _restorePending();
     _onLogin();
@@ -209,7 +213,6 @@ class _HomePageState extends State<HomePage> {
       appBar: AppBar(
         title: const Text('Entry Verification'),
       ),
-
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -236,17 +239,11 @@ class _HomePageState extends State<HomePage> {
   }
 }
 
-/// =======================
-/// BACKGROUND ENTRY
-/// =======================
 @pragma('vm:entry-point')
 void _startCallback() {
   FlutterForegroundTask.setTaskHandler(GeoTaskHandler());
 }
 
-/// =======================
-/// BACKGROUND HANDLER
-/// =======================
 class GeoTaskHandler extends TaskHandler {
   bool? _inside;
   Timer? _timer;

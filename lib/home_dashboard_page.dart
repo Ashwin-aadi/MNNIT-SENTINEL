@@ -9,6 +9,10 @@ import 'package:path_provider/path_provider.dart';
 
 import 'main.dart'; // HomePage (Entry Verification)
 import 'mess_menu_page.dart'; // ✅ FIXED FILE NAME
+import 'library_page.dart';
+import 'safe_page.dart';
+import 'attendance.dart';
+
 
 class HomeDashboardPage extends StatelessWidget {
   const HomeDashboardPage({super.key});
@@ -124,7 +128,11 @@ class HomeDashboardPage extends StatelessWidget {
                         title: 'Attendance',
                         icon: Icons.check_circle,
                         color: Colors.blue.shade200,
-                        onTap: () {},
+                        onTap: () {Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const AttendancePage()),
+                        );
+                        },
                       ),
                     ],
                   ),
@@ -135,7 +143,15 @@ class HomeDashboardPage extends StatelessWidget {
                     title: 'Library',
                     icon: Icons.library_books,
                     color: Colors.indigo.shade200,
-                    onTap: () {},
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => LibraryPage(),
+                        ),
+                      );
+                    },
+
                   ),
 
                   const SizedBox(height: 16),
@@ -161,7 +177,11 @@ class HomeDashboardPage extends StatelessWidget {
                         title: 'File Safe',
                         icon: Icons.lock,
                         color: Colors.purple.shade200,
-                        onTap: () {},
+                        onTap: () {Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const SafePage()),
+                        );
+                        },
                       ),
                     ],
                   ),
