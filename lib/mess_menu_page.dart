@@ -2,13 +2,35 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-class MessMenuPage extends StatelessWidget {
+import 'mess_geofence_service.dart';
+
+class MessMenuPage extends StatefulWidget {
   const MessMenuPage({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
+  State<MessMenuPage> createState() => _MessMenuPageState();
+}
 
+class _MessMenuPageState extends State<MessMenuPage> {
+  String? uid;
+
+  @override
+  void initState() {
+    super.initState();
+    uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid != null) {
+      MessGeofenceService.start(uid!);
+    }
+  }
+
+  @override
+  void dispose() {
+    MessGeofenceService.stop();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     if (uid == null) {
       return const Scaffold(
         body: Center(child: Text('User not logged in')),
@@ -46,12 +68,9 @@ class MessMenuPage extends StatelessWidget {
   }
 
   // ============================================================
-  // MAIN UI
+  // MAIN UI (DATA UNTOUCHED)
   // ============================================================
   Widget _buildMessUI(BuildContext context, String userGender) {
-    // =======================
-    // FULL MESS DATA (YOURS)
-    // =======================
     final Map<String, Map<String, Map<String, Map<String, String>>>>
     messData = {
       'Male': {
@@ -354,12 +373,18 @@ class MessMenuPage extends StatelessWidget {
                   ),
                   Text(
                     "Today is $currentDay ($userGender)",
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 18,
                       color: Colors.white70,
                     ),
                   ),
+
+                  const SizedBox(height: 24),
+
+                  _messOccupancyCard(),
+
                   const SizedBox(height: 30),
+
                   _buildMealBox(
                     "Breakfast",
                     dayMenu['B']!['time']!,
@@ -393,50 +418,96 @@ class MessMenuPage extends StatelessWidget {
     );
   }
 
-    Widget _buildMealBox(
-    String title,
-    String time,
-    String menu,
-    Color accentColor,
-    ) {
-    return Container(
-    width: double.infinity,
-    margin: const EdgeInsets.only(bottom: 16),
-    padding: const EdgeInsets.all(20),
-    decoration: BoxDecoration(
-    color: Colors.white,
-    borderRadius: BorderRadius.circular(15),
-    boxShadow: const [
-    BoxShadow(
-    color: Colors.black12,
-    blurRadius: 10,
-    offset: Offset(0, 5),
-    ),
-    ],
-    border: Border(left: BorderSide(color: accentColor, width: 5)),
-    ),
-    child: Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-    Row(
-    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-    children: [
-    Text(
-    title,
-    style: TextStyle(
-    fontSize: 18,
-    fontWeight: FontWeight.bold,
-    color: accentColor,
-    ),
-    ),
-    const Icon(Icons.access_time, size: 16),
-    ],
-    ),
-    Text(time, style: const TextStyle(fontSize: 12)),
-    const Divider(height: 20),
-    Text(menu, style: const TextStyle(fontSize: 16)),
-    ],
-    ),
+  // ============================================================
+  // OCCUPANCY CARD
+  // ============================================================
+  Widget _messOccupancyCard() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .where('insideMess', isEqualTo: true)
+          .snapshots(),
+      builder: (context, snapshot) {
+        final count = snapshot.data?.docs.length ?? 0;
+
+        return Container(
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 18),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.95),
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: const [
+              BoxShadow(
+                color: Colors.black12,
+                blurRadius: 10,
+                offset: Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.people, size: 28),
+              const SizedBox(width: 12),
+              Text(
+                '$count students currently in mess',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
-    }
   }
+
+  // ============================================================
+  // MEAL BOX
+  // ============================================================
+  Widget _buildMealBox(
+      String title,
+      String time,
+      String menu,
+      Color accentColor,
+      ) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(15),
+        boxShadow: const [
+          BoxShadow(
+            color: Colors.black12,
+            blurRadius: 10,
+            offset: Offset(0, 5),
+          ),
+        ],
+        border: Border(left: BorderSide(color: accentColor, width: 5)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: accentColor,
+                ),
+              ),
+              const Icon(Icons.access_time, size: 16),
+            ],
+          ),
+          Text(time, style: const TextStyle(fontSize: 12)),
+          const Divider(height: 20),
+          Text(menu, style: const TextStyle(fontSize: 16)),
+        ],
+      ),
+    );
+  }
+}
