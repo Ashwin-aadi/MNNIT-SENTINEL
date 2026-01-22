@@ -1,13 +1,20 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
 
-import 'main.dart'; // for HomePage
+import 'main.dart'; // HomePage (Entry Verification)
 
 class HomeDashboardPage extends StatelessWidget {
   const HomeDashboardPage({super.key});
 
+  /// =======================
+  /// LOGOUT
+  /// =======================
   Future<void> _logout(BuildContext context) async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
 
@@ -28,14 +35,38 @@ class HomeDashboardPage extends StatelessWidget {
     await FirebaseAuth.instance.signOut();
   }
 
+  /// =======================
+  /// PICK & SAVE PHOTO LOCALLY
+  /// =======================
+  Future<void> _pickAndSavePhoto(BuildContext context) async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 70,
+    );
+
+    if (picked == null) return;
+
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+    final directory = await getApplicationDocumentsDirectory();
+    final localPath = '${directory.path}/profile_$uid.jpg';
+
+    final savedImage = await File(picked.path).copy(localPath);
+
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .update({
+      'photoPath': savedImage.path,
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final uid = FirebaseAuth.instance.currentUser!.uid;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF2F4FF),
-
-      /// 🔐 LOGOUT LIVES HERE
       appBar: AppBar(
         title: const Text('MNNIT SENTINEL'),
         actions: [
@@ -45,7 +76,6 @@ class HomeDashboardPage extends StatelessWidget {
           ),
         ],
       ),
-
       body: SafeArea(
         child: StreamBuilder<DocumentSnapshot>(
           stream: FirebaseFirestore.instance
@@ -67,7 +97,10 @@ class HomeDashboardPage extends StatelessWidget {
                   _greeting(data['fullName']),
                   const SizedBox(height: 16),
 
-                  _idCard(data),
+                  _idCard(
+                    data,
+                    onPhotoTap: () => _pickAndSavePhoto(context),
+                  ),
                   const SizedBox(height: 16),
 
                   Row(
@@ -133,6 +166,9 @@ class HomeDashboardPage extends StatelessWidget {
     );
   }
 
+  /// =======================
+  /// UI WIDGETS
+  /// =======================
   Widget _greeting(String name) {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -160,7 +196,12 @@ class HomeDashboardPage extends StatelessWidget {
     );
   }
 
-  Widget _idCard(Map<String, dynamic> data) {
+  Widget _idCard(
+      Map<String, dynamic> data, {
+        required VoidCallback onPhotoTap,
+      }) {
+    final photoPath = data['photoPath'];
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -169,10 +210,24 @@ class HomeDashboardPage extends StatelessWidget {
       ),
       child: Row(
         children: [
-          CircleAvatar(
-            radius: 36,
-            backgroundColor: Colors.grey.shade300,
-            child: const Icon(Icons.person, size: 40),
+          GestureDetector(
+            onTap: onPhotoTap,
+            child: ClipOval(
+              child: Container(
+                width: 72,
+                height: 72,
+                color: Colors.grey.shade300,
+                child: photoPath != null && File(photoPath).existsSync()
+                    ? Image.file(
+                  File(photoPath),
+                  fit: BoxFit.cover,
+                )
+                    : const Icon(
+                  Icons.camera_alt,
+                  size: 30,
+                ),
+              ),
+            ),
           ),
           const SizedBox(width: 16),
           Column(
