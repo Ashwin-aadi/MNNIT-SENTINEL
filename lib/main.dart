@@ -8,7 +8,6 @@ import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:device_info_plus/device_info_plus.dart';
 
 import 'welcome_page.dart';
 import 'signup_page.dart';
@@ -32,12 +31,27 @@ final FlutterLocalNotificationsPlugin _localNotifications =
 FlutterLocalNotificationsPlugin();
 
 /// =======================
-/// DEVICE ID
+/// AUTH UID HELPERS
 /// =======================
-Future<String> getDeviceId() async {
-  final info = DeviceInfoPlugin();
-  final android = await info.androidInfo;
-  return android.id ?? 'unknown_device';
+String getCurrentUid() {
+  final user = FirebaseAuth.instance.currentUser;
+  if (user == null) {
+    throw Exception('User not authenticated');
+  }
+  return user.uid;
+}
+
+Future<void> persistUid() async {
+  final prefs = await SharedPreferences.getInstance();
+  final user = FirebaseAuth.instance.currentUser;
+  if (user != null) {
+    await prefs.setString('uid', user.uid);
+  }
+}
+
+Future<String?> getStoredUid() async {
+  final prefs = await SharedPreferences.getInstance();
+  return prefs.getString('uid');
 }
 
 /// =======================
@@ -110,7 +124,6 @@ class MyApp extends StatelessWidget {
         '/check-email': (_) => const CheckEmailPage(),
         '/get-started': (_) => const GetStartedPage(),
       },
-
     );
   }
 }
@@ -131,6 +144,7 @@ class _HomePageState extends State<HomePage> {
     super.initState();
     FlutterForegroundTask.initCommunicationPort();
     _restorePending();
+    persistUid(); // 🔐 store UID for background isolate
   }
 
   Future<void> _restorePending() async {
@@ -207,10 +221,12 @@ class _HomePageState extends State<HomePage> {
     );
     if (!ok) return;
 
-    final deviceId = await getDeviceId();
+    final uid = getCurrentUid();
 
-    await FirebaseFirestore.instance.collection('geofence_events').add({
-      'deviceId': deviceId,
+    await FirebaseFirestore.instance
+        .collection('geofence_events')
+        .add({
+      'uid': uid,
       'status': _pendingStatus,
       'timestamp': FieldValue.serverTimestamp(),
       'verified': true,
@@ -301,7 +317,9 @@ class GeoTaskHandler extends TaskHandler {
       }
 
       final elapsed =
-          (DateTime.now().millisecondsSinceEpoch - _eventTimestamp!) ~/ 1000;
+          (DateTime.now().millisecondsSinceEpoch -
+              _eventTimestamp!) ~/
+              1000;
 
       final remaining = ALERT_TIMEOUT_SECONDS - elapsed;
 
@@ -313,9 +331,11 @@ class GeoTaskHandler extends TaskHandler {
       } else {
         timer.cancel();
 
-        final deviceId = await getDeviceId();
+        final uid = await getStoredUid();
+        if (uid == null) return;
+
         await FirebaseFirestore.instance.collection('alerts').add({
-          'deviceId': deviceId,
+          'uid': uid,
           'status': status,
           'timestamp': FieldValue.serverTimestamp(),
           'verified': false,
