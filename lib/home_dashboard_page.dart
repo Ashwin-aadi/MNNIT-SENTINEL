@@ -1,10 +1,32 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'main.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
+
+import 'main.dart'; // for HomePage
 
 class HomeDashboardPage extends StatelessWidget {
   const HomeDashboardPage({super.key});
+
+  Future<void> _logout(BuildContext context) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+
+    if (uid != null) {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .update({
+        'isLoggedIn': false,
+        'lastLogoutAt': DateTime.now().toIso8601String(),
+      });
+    }
+
+    if (await FlutterForegroundTask.isRunningService) {
+      await FlutterForegroundTask.stopService();
+    }
+
+    await FirebaseAuth.instance.signOut();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -12,6 +34,18 @@ class HomeDashboardPage extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF2F4FF),
+
+      /// 🔐 LOGOUT LIVES HERE
+      appBar: AppBar(
+        title: const Text('MNNIT SENTINEL'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: () => _logout(context),
+          ),
+        ],
+      ),
+
       body: SafeArea(
         child: StreamBuilder<DocumentSnapshot>(
           stream: FirebaseFirestore.instance
@@ -76,7 +110,7 @@ class HomeDashboardPage extends StatelessWidget {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => HomePage(),
+                              builder: (_) => const HomePage(),
                             ),
                           );
                         },
