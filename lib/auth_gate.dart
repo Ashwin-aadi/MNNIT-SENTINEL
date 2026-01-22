@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'home_dashboard_page.dart';
 import 'welcome_page.dart';
 import 'check_email_page.dart';
 import 'get_started_page.dart';
@@ -55,7 +56,7 @@ class AuthGate extends StatelessWidget {
             }
 
             // ✅ All conditions satisfied
-            return const HomePage();
+            return const HomeDashboardPage();
           },
         );
       },
