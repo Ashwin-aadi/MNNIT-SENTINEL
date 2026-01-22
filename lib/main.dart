@@ -9,7 +9,6 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'welcome_page.dart';
 import 'signup_page.dart';
 import 'check_email_page.dart';
 import 'get_started_page.dart';
@@ -31,7 +30,7 @@ final FlutterLocalNotificationsPlugin _localNotifications =
 FlutterLocalNotificationsPlugin();
 
 /// =======================
-/// UID HELPERS
+/// UID STORAGE (BG ISOLATE)
 /// =======================
 Future<void> persistUid() async {
   final user = FirebaseAuth.instance.currentUser;
@@ -132,7 +131,26 @@ class _HomePageState extends State<HomePage> {
     super.initState();
     FlutterForegroundTask.initCommunicationPort();
     _restorePending();
-    persistUid();
+    _onLogin();
+  }
+
+  Future<void> _onLogin() async {
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+
+    await persistUid();
+
+    await FirebaseFirestore.instance.collection('users').doc(uid).update({
+      'isLoggedIn': true,
+      'lastLoginAt': DateTime.now().toIso8601String(),
+    });
+
+    if (!await FlutterForegroundTask.isRunningService) {
+      await FlutterForegroundTask.startService(
+        notificationTitle: 'Geofence Active',
+        notificationText: 'Monitoring location',
+        callback: _startCallback,
+      );
+    }
   }
 
   Future<void> _restorePending() async {
@@ -141,59 +159,6 @@ class _HomePageState extends State<HomePage> {
     if (_pendingStatus != null) {
       geofenceStatus.value = _pendingStatus!;
     }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('MNNIT-SENTINEL'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () async {
-              await FirebaseAuth.instance.signOut();
-            },
-          ),
-        ],
-      ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            ValueListenableBuilder<String>(
-              valueListenable: geofenceStatus,
-              builder: (_, value, __) => Text(
-                value,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-            const SizedBox(height: 30),
-            ElevatedButton(
-              onPressed: _startService,
-              child: const Text('Start Geofence Service'),
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: _verifyFace,
-              child: const Text('Scan Face ID & Register'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _startService() async {
-    if (await FlutterForegroundTask.isRunningService) return;
-    await FlutterForegroundTask.startService(
-      notificationTitle: 'Geofence Active',
-      notificationText: 'Monitoring location',
-      callback: _startCallback,
-    );
   }
 
   Future<void> _verifyFace() async {
@@ -211,17 +176,69 @@ class _HomePageState extends State<HomePage> {
 
     final uid = FirebaseAuth.instance.currentUser!.uid;
 
-    await FirebaseFirestore.instance
-        .collection('users')
-        .doc(uid)
-        .update({
+    await FirebaseFirestore.instance.collection('users').doc(uid).update({
       'geofenceStatus': _pendingStatus,
       'geofenceVerified': true,
-      'geofenceUpdatedAt': FieldValue.serverTimestamp(),
+      'geofenceUpdatedAt': DateTime.now().toIso8601String(),
     });
 
     FlutterForegroundTask.sendDataToTask({'type': 'VERIFIED'});
     geofenceStatus.value = 'Registered: $_pendingStatus';
+  }
+
+  Future<void> _logout() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+
+    if (uid != null) {
+      await FirebaseFirestore.instance.collection('users').doc(uid).update({
+        'isLoggedIn': false,
+        'lastLogoutAt': DateTime.now().toIso8601String(),
+      });
+    }
+
+    if (await FlutterForegroundTask.isRunningService) {
+      await FlutterForegroundTask.stopService();
+    }
+
+    await FirebaseAuth.instance.signOut();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('MNNIT-SENTINEL'),
+        automaticallyImplyLeading: false,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: _logout,
+          ),
+        ],
+      ),
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            ValueListenableBuilder<String>(
+              valueListenable: geofenceStatus,
+              builder: (_, value, __) => Text(
+                value,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: _verifyFace,
+              child: const Text('Scan Face ID & Register'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -308,12 +325,11 @@ class GeoTaskHandler extends TaskHandler {
               _eventTimestamp!) ~/
               1000;
 
-      final remaining = ALERT_TIMEOUT_SECONDS - elapsed;
-
-      if (remaining > 0) {
+      if (elapsed < ALERT_TIMEOUT_SECONDS) {
         FlutterForegroundTask.updateService(
           notificationTitle: 'Geofence Status',
-          notificationText: '$status | Verify in $remaining sec',
+          notificationText:
+          '$status | Verify in ${ALERT_TIMEOUT_SECONDS - elapsed}s',
         );
       } else {
         timer.cancel();
@@ -325,20 +341,18 @@ class GeoTaskHandler extends TaskHandler {
             .collection('users')
             .doc(uid)
             .update({
-          // live state
           'geofenceStatus': status,
           'geofenceVerified': false,
-          'geofenceUpdatedAt': DateTime.now().toIso8601String(),
-
-          // permanent log (SAFE)
+          'geofenceUpdatedAt':
+          DateTime.now().toIso8601String(),
           'geofenceFailures': FieldValue.arrayUnion([
             {
               'status': status,
-              'failedAt': DateTime.now().toIso8601String(),
+              'failedAt':
+              DateTime.now().toIso8601String(),
             }
           ]),
         });
-
 
         FlutterForegroundTask.updateService(
           notificationTitle: 'Geofence Status',
