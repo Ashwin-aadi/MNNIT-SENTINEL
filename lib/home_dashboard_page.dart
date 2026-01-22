@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'main.dart'; // HomePage (Entry Verification)
+import 'mess_menu_page.dart'; // ✅ FIXED FILE NAME
 
 class HomeDashboardPage extends StatelessWidget {
   const HomeDashboardPage({super.key});
@@ -109,7 +110,14 @@ class HomeDashboardPage extends StatelessWidget {
                         title: 'Mess',
                         icon: Icons.restaurant,
                         color: Colors.orange.shade200,
-                        onTap: () {},
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => MessMenuPage(),
+                            ),
+                          );
+                        },
                       ),
                       const SizedBox(width: 12),
                       _smallCard(
@@ -143,7 +151,7 @@ class HomeDashboardPage extends StatelessWidget {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => const HomePage(),
+                              builder: (_) => HomePage(),
                             ),
                           );
                         },
@@ -218,14 +226,8 @@ class HomeDashboardPage extends StatelessWidget {
                 height: 72,
                 color: Colors.grey.shade300,
                 child: photoPath != null && File(photoPath).existsSync()
-                    ? Image.file(
-                  File(photoPath),
-                  fit: BoxFit.cover,
-                )
-                    : const Icon(
-                  Icons.camera_alt,
-                  size: 30,
-                ),
+                    ? Image.file(File(photoPath), fit: BoxFit.cover)
+                    : const Icon(Icons.camera_alt, size: 30),
               ),
             ),
           ),
@@ -284,10 +286,7 @@ class HomeDashboardPage extends StatelessWidget {
                 ),
               ),
               if (subtitle != null)
-                Text(
-                  subtitle,
-                  style: const TextStyle(fontSize: 12),
-                ),
+                Text(subtitle, style: const TextStyle(fontSize: 12)),
             ],
           ),
         ),
