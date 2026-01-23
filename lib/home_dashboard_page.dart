@@ -12,6 +12,8 @@ import 'mess_menu_page.dart';
 import 'library_page.dart';
 import 'safe_page.dart';
 import 'attendance.dart';
+import 'anonymous_session_service.dart';
+import 'anonymous_chat_page.dart';
 
 class HomeDashboardPage extends StatelessWidget {
   const HomeDashboardPage({super.key});
@@ -108,13 +110,66 @@ class HomeDashboardPage extends StatelessWidget {
                 children: [
                   _greeting(data['fullName']),
                   const SizedBox(height: 16),
+                  GestureDetector(
+                    onTap: () async {
+                      final session =
+                      await AnonymousSessionService.createSession();
 
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => AnonymousChatPage(
+                            roomId: 'global_room', // ✅ FIXED
+                            alias: session['alias']!,
+                          ),
+                        ),
+                      );
+                    },
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 12),
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF434343), Color(0xFF000000)],
+                        ),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        children: const [
+                          Icon(Icons.forum,
+                              color: Colors.white, size: 32),
+                          SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Anonymous Discussion',
+                                  style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold),
+                                ),
+                                SizedBox(height: 4),
+                                Text(
+                                  'Chat freely without revealing identity',
+                                  style: TextStyle(color: Colors.white70),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Icon(Icons.arrow_forward_ios,
+                              color: Colors.white),
+                        ],
+                      ),
+                    ),
+                  ),
                   _idCard(
                     data,
                     onPhotoTap: () => _pickAndSavePhoto(context),
                   ),
                   const SizedBox(height: 16),
-
                   Row(
                     children: [
                       _smallCard(
@@ -146,9 +201,7 @@ class HomeDashboardPage extends StatelessWidget {
                       ),
                     ],
                   ),
-
                   const SizedBox(height: 16),
-
                   _wideCard(
                     title: 'Library',
                     icon: Icons.library_books,
@@ -162,9 +215,7 @@ class HomeDashboardPage extends StatelessWidget {
                       );
                     },
                   ),
-
                   const SizedBox(height: 16),
-
                   Row(
                     children: [
                       _smallCard(
@@ -247,7 +298,8 @@ class HomeDashboardPage extends StatelessWidget {
       child: Column(
         children: [
           Container(
-            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+            padding:
+            const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
             decoration: const BoxDecoration(
               color: Color(0xFF1B2A6B),
               borderRadius: BorderRadius.only(
@@ -284,8 +336,10 @@ class HomeDashboardPage extends StatelessWidget {
                       width: 80,
                       height: 80,
                       color: Colors.grey.shade300,
-                      child: photoPath != null && File(photoPath).existsSync()
-                          ? Image.file(File(photoPath), fit: BoxFit.cover)
+                      child: photoPath != null &&
+                          File(photoPath).existsSync()
+                          ? Image.file(File(photoPath),
+                          fit: BoxFit.cover)
                           : const Icon(Icons.person, size: 40),
                     ),
                   ),

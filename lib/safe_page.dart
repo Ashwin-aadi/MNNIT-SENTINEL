@@ -37,12 +37,12 @@ class SafePage extends StatefulWidget {
 }
 
 class _SafePageState extends State<SafePage> {
+  final LocalAuthentication _auth = LocalAuthentication();
+
   List<SafeFile> files = [];
   bool isLoading = false;
-
-  final LocalAuthentication _auth = LocalAuthentication();
-  enc.Key? _aesKey;
   bool _unlocked = false;
+  enc.Key? _aesKey;
 
   // =========================
   // INIT
@@ -64,9 +64,10 @@ class _SafePageState extends State<SafePage> {
       localizedReason: 'Unlock File Safe',
       options: const AuthenticationOptions(biometricOnly: true),
     );
-    if (!ok) return;
 
-    await _loadFiles();
+    if (ok) {
+      await _loadFiles();
+    }
   }
 
   // =========================
@@ -110,7 +111,7 @@ class _SafePageState extends State<SafePage> {
   }
 
   // =========================
-  // VERIFY PIN + DERIVE KEY
+  // VERIFY PIN + DERIVE AES KEY
   // =========================
   Future<void> _deriveKey() async {
     final prefs = await SharedPreferences.getInstance();
@@ -188,6 +189,7 @@ class _SafePageState extends State<SafePage> {
     files.clear();
 
     final dir = await _safeDir();
+
     for (final f in dir.listSync()) {
       if (f is! File || !f.path.endsWith('.enc')) continue;
 
@@ -213,7 +215,7 @@ class _SafePageState extends State<SafePage> {
   }
 
   // =========================
-  // PICK + ENCRYPT
+  // PICK + ENCRYPT (FIXED)
   // =========================
   Future<void> pickFiles() async {
     if (!_unlocked) await _deriveKey();
@@ -223,62 +225,92 @@ class _SafePageState extends State<SafePage> {
 
     final dir = await _safeDir();
     final encrypter = enc.Encrypter(enc.AES(_aesKey!));
-    final iv = enc.IV.fromLength(16);
 
     for (final f in result.files) {
       final bytes = await File(f.path!).readAsBytes();
+
+      final iv = enc.IV.fromSecureRandom(16);
       final encrypted = encrypter.encryptBytes(bytes, iv: iv);
+
+      final combined = Uint8List.fromList([
+        ...iv.bytes,
+        ...encrypted.bytes,
+      ]);
 
       final out =
           '${dir.path}/${DateTime.now().millisecondsSinceEpoch}_${f.name}.enc';
-      await File(out).writeAsBytes(encrypted.bytes, flush: true);
+      await File(out).writeAsBytes(combined, flush: true);
     }
 
     await _loadFiles();
   }
 
   // =========================
-  // DECRYPT → OPEN → CLEANUP
+  // DECRYPT + OPEN
   // =========================
   Future<void> openFile(SafeFile file) async {
     try {
       if (!_unlocked) await _deriveKey();
 
-      final iv = enc.IV.fromLength(16);
-      final encrypter = enc.Encrypter(enc.AES(_aesKey!));
+      final bytes = await File(file.path).readAsBytes();
 
-      final encryptedBytes = await File(file.path).readAsBytes();
+      final iv = enc.IV(bytes.sublist(0, 16));
+      final encryptedData = bytes.sublist(16);
+
+      final encrypter = enc.Encrypter(enc.AES(_aesKey!));
       final decrypted = encrypter.decryptBytes(
-        enc.Encrypted(encryptedBytes),
+        enc.Encrypted(encryptedData),
         iv: iv,
       );
 
       final tempDir = await getTemporaryDirectory();
       final tempPath = '${tempDir.path}/${file.name}';
       final tempFile = File(tempPath);
+
       await tempFile.writeAsBytes(decrypted, flush: true);
 
-      final mime = switch (file.type) {
-        SafeFileType.pdf => 'application/pdf',
-        SafeFileType.photo => 'image/*',
-        SafeFileType.excel => 'application/vnd.ms-excel',
-      };
-
-      final result = await OpenFilex.open(tempPath, type: mime);
+      final result = await OpenFilex.open(tempPath);
 
       if (result.type != ResultType.done) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to open file')),
-        );
+        throw Exception('Failed to open file');
       }
 
-      // delete later (IMPORTANT)
       Future.delayed(const Duration(seconds: 45), () {
         if (tempFile.existsSync()) tempFile.deleteSync();
       });
-    } catch (_) {
-      // already handled
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Unable to open file')),
+      );
     }
+  }
+
+  // =========================
+  // DELETE FILE
+  // =========================
+  Future<void> _deleteFile(SafeFile file) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Delete File'),
+        content: const Text('This will permanently remove the file.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    await File(file.path).delete();
+    await _loadFiles();
   }
 
   // =========================
@@ -288,8 +320,10 @@ class _SafePageState extends State<SafePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('File Safe')),
-      floatingActionButton:
-      FloatingActionButton(onPressed: pickFiles, child: const Icon(Icons.add)),
+      floatingActionButton: FloatingActionButton(
+        onPressed: pickFiles,
+        child: const Icon(Icons.add),
+      ),
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
           : ListView.builder(
@@ -300,6 +334,10 @@ class _SafePageState extends State<SafePage> {
             title: Text(f.name),
             subtitle: Text(f.type.name),
             onTap: () => openFile(f),
+            trailing: IconButton(
+              icon: const Icon(Icons.delete, color: Colors.red),
+              onPressed: () => _deleteFile(f),
+            ),
           );
         },
       ),
