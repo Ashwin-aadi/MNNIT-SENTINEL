@@ -215,7 +215,7 @@ class _SafePageState extends State<SafePage> {
   }
 
   // =========================
-  // PICK + ENCRYPT (FIXED)
+  // PICK + ENCRYPT
   // =========================
   Future<void> pickFiles() async {
     if (!_unlocked) await _deriveKey();
@@ -253,7 +253,6 @@ class _SafePageState extends State<SafePage> {
       if (!_unlocked) await _deriveKey();
 
       final bytes = await File(file.path).readAsBytes();
-
       final iv = enc.IV(bytes.sublist(0, 16));
       final encryptedData = bytes.sublist(16);
 
@@ -268,19 +267,14 @@ class _SafePageState extends State<SafePage> {
       final tempFile = File(tempPath);
 
       await tempFile.writeAsBytes(decrypted, flush: true);
-
-      final result = await OpenFilex.open(tempPath);
-
-      if (result.type != ResultType.done) {
-        throw Exception('Failed to open file');
-      }
+      await OpenFilex.open(tempPath);
 
       Future.delayed(const Duration(seconds: 45), () {
         if (tempFile.existsSync()) tempFile.deleteSync();
       });
-    } catch (e) {
+    } catch (_) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Unable to open file')),
+        const SnackBar(content: Text('Unable to open file')),
       );
     }
   }
@@ -319,27 +313,87 @@ class _SafePageState extends State<SafePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('File Safe')),
+      backgroundColor: Colors.grey.shade100,
+      appBar: AppBar(
+        backgroundColor: Colors.blue,
+        elevation: 0,
+        title: const Text(
+          'File Safe',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        centerTitle: true,
+      ),
       floatingActionButton: FloatingActionButton(
+        backgroundColor: Colors.blue,
         onPressed: pickFiles,
-        child: const Icon(Icons.add),
+        child: const Icon(Icons.add, color: Colors.white),
       ),
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
-          : ListView.builder(
-        itemCount: files.length,
-        itemBuilder: (_, i) {
-          final f = files[i];
-          return ListTile(
-            title: Text(f.name),
-            subtitle: Text(f.type.name),
-            onTap: () => openFile(f),
-            trailing: IconButton(
-              icon: const Icon(Icons.delete, color: Colors.red),
-              onPressed: () => _deleteFile(f),
-            ),
-          );
-        },
+          : files.isEmpty
+          ? const Center(
+        child: Text(
+          'No files added yet',
+          style: TextStyle(color: Colors.grey),
+        ),
+      )
+          : Padding(
+        padding: const EdgeInsets.all(12),
+        child: ListView.builder(
+          itemCount: files.length,
+          itemBuilder: (_, i) => _fileCard(files[i]),
+        ),
+      ),
+    );
+  }
+
+  Widget _fileCard(SafeFile file) {
+    IconData icon;
+    Color color;
+
+    switch (file.type) {
+      case SafeFileType.pdf:
+        icon = Icons.picture_as_pdf;
+        color = Colors.red;
+        break;
+      case SafeFileType.photo:
+        icon = Icons.image;
+        color = Colors.green;
+        break;
+      case SafeFileType.excel:
+        icon = Icons.table_chart;
+        color = Colors.teal;
+        break;
+    }
+
+    return Card(
+      elevation: 3,
+      margin: const EdgeInsets.only(bottom: 12),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.all(12),
+        leading: Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.15),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, color: color, size: 30),
+        ),
+        title: Text(
+          file.name,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontWeight: FontWeight.w600),
+        ),
+        subtitle: Text(file.type.name.toUpperCase()),
+        trailing: IconButton(
+          icon: const Icon(Icons.delete, color: Colors.red),
+          onPressed: () => _deleteFile(file),
+        ),
+        onTap: () => openFile(file),
       ),
     );
   }
