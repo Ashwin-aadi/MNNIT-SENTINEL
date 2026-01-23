@@ -53,6 +53,19 @@ Future<void> requestCorePermissions() async {
 }
 
 @pragma('vm:entry-point')
+Future<void> bootstrapAfterLogin() async {
+  await requestCorePermissions();
+  await persistUid();
+
+  if (!await FlutterForegroundTask.isRunningService) {
+    await FlutterForegroundTask.startService(
+      notificationTitle: 'Geofence Active',
+      notificationText: 'Monitoring location',
+      callback: _startCallback,
+    );
+  }
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
@@ -128,33 +141,8 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      requestCorePermissions();
-    });
-
     FlutterForegroundTask.initCommunicationPort();
     _restorePending();
-    _onLogin();
-  }
-
-  Future<void> _onLogin() async {
-    final uid = FirebaseAuth.instance.currentUser!.uid;
-
-    await persistUid();
-
-    await FirebaseFirestore.instance.collection('users').doc(uid).update({
-      'isLoggedIn': true,
-      'lastLoginAt': DateTime.now().toIso8601String(),
-    });
-
-    if (!await FlutterForegroundTask.isRunningService) {
-      await FlutterForegroundTask.startService(
-        notificationTitle: 'Geofence Active',
-        notificationText: 'Monitoring location',
-        callback: _startCallback,
-      );
-    }
   }
 
   Future<void> _restorePending() async {
@@ -188,23 +176,6 @@ class _HomePageState extends State<HomePage> {
 
     FlutterForegroundTask.sendDataToTask({'type': 'VERIFIED'});
     geofenceStatus.value = 'Registered: $_pendingStatus';
-  }
-
-  Future<void> _logout() async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-
-    if (uid != null) {
-      await FirebaseFirestore.instance.collection('users').doc(uid).update({
-        'isLoggedIn': false,
-        'lastLogoutAt': DateTime.now().toIso8601String(),
-      });
-    }
-
-    if (await FlutterForegroundTask.isRunningService) {
-      await FlutterForegroundTask.stopService();
-    }
-
-    await FirebaseAuth.instance.signOut();
   }
 
   @override
@@ -336,13 +307,6 @@ class GeoTaskHandler extends TaskHandler {
           'geofenceVerified': false,
           'geofenceUpdatedAt':
           DateTime.now().toIso8601String(),
-          'geofenceFailures': FieldValue.arrayUnion([
-            {
-              'status': status,
-              'failedAt':
-              DateTime.now().toIso8601String(),
-            }
-          ]),
         });
 
         FlutterForegroundTask.updateService(

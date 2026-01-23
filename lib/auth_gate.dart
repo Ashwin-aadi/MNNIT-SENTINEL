@@ -6,7 +6,7 @@ import 'home_dashboard_page.dart';
 import 'welcome_page.dart';
 import 'check_email_page.dart';
 import 'get_started_page.dart';
-import 'main.dart'; // for HomePage
+import 'main.dart';
 
 class AuthGate extends StatelessWidget {
   const AuthGate({super.key});
@@ -21,26 +21,22 @@ class AuthGate extends StatelessWidget {
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
-        // 🔄 Loading
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
             body: Center(child: CircularProgressIndicator()),
           );
         }
 
-        // ❌ Not signed in
         if (!snapshot.hasData) {
           return const WelcomePage();
         }
 
         final user = snapshot.data!;
 
-        // ❌ Email not verified
         if (!user.emailVerified) {
           return const CheckEmailPage();
         }
 
-        // 🔄 Check onboarding
         return FutureBuilder<bool>(
           future: _isOnboardingDone(),
           builder: (context, snap) {
@@ -50,12 +46,14 @@ class AuthGate extends StatelessWidget {
               );
             }
 
-            // ❌ Not onboarded
             if (!snap.data!) {
               return const GetStartedPage();
             }
 
-            // ✅ All conditions satisfied
+            WidgetsBinding.instance.addPostFrameCallback((_) async {
+              await bootstrapAfterLogin();
+            });
+
             return const HomeDashboardPage();
           },
         );
