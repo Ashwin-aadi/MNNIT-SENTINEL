@@ -256,6 +256,36 @@ class _LibraryPageState extends State<LibraryPage> {
   }
 
   // ===============================
+  // DELETE BOOK (ADDED)
+  // ===============================
+  Future<void> _deleteBook(int index) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Remove Book'),
+        content:
+        const Text('Do you want to remove this book from the list?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      setState(() {
+        issuedBooks.removeAt(index);
+      });
+    }
+  }
+
+  // ===============================
   // ADD BOOK
   // ===============================
   void _showAddBookDialog() {
@@ -398,6 +428,11 @@ class _LibraryPageState extends State<LibraryPage> {
                             ? Colors.red
                             : Colors.grey,
                       ),
+                    ),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.delete,
+                          color: Colors.red),
+                      onPressed: () => _deleteBook(i),
                     ),
                   ),
                 );
