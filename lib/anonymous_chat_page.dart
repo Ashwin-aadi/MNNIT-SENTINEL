@@ -19,6 +19,16 @@ class _AnonymousChatPageState extends State<AnonymousChatPage> {
   late final TextEditingController _controller;
   late final ScrollController _scrollController;
 
+  final List<String> _badWords = [
+    'fuck',
+    'shit',
+    'bitch',
+    'asshole',
+    'slut',
+    'retard',
+    'bastard'
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -31,6 +41,11 @@ class _AnonymousChatPageState extends State<AnonymousChatPage> {
     _controller.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  bool _containsBadWords(String text) {
+    final lower = text.toLowerCase();
+    return _badWords.any((w) => lower.contains(w));
   }
 
   void _scrollToBottom() {
@@ -80,8 +95,20 @@ class _AnonymousChatPageState extends State<AnonymousChatPage> {
                   controller: _scrollController,
                   itemCount: docs.length,
                   itemBuilder: (context, index) {
-                    final data = docs[index].data() as Map<String, dynamic>;
+                    final doc = docs[index];
+                    final data = doc.data() as Map<String, dynamic>;
                     final isMe = data['alias'] == widget.alias;
+
+                    if (data['flagged'] == true &&
+                        (data['reports'] ?? 0) >= 3) {
+                      return const Padding(
+                        padding: EdgeInsets.all(8),
+                        child: Text(
+                          'Message hidden due to multiple reports',
+                          style: TextStyle(color: Colors.grey),
+                        ),
+                      );
+                    }
 
                     return Align(
                       alignment:
@@ -110,6 +137,30 @@ class _AnonymousChatPageState extends State<AnonymousChatPage> {
                             ),
                             const SizedBox(height: 4),
                             Text(data['text']),
+                            const SizedBox(height: 4),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(
+                                    Icons.flag,
+                                    size: 18,
+                                    color: Colors.red,
+                                  ),
+                                  onPressed: () async {
+                                    await FirebaseFirestore.instance
+                                        .collection('chat_rooms')
+                                        .doc(widget.roomId)
+                                        .collection('messages')
+                                        .doc(doc.id)
+                                        .update({
+                                      'reports': FieldValue.increment(1),
+                                      'flagged': true,
+                                    });
+                                  },
+                                ),
+                              ],
+                            ),
                           ],
                         ),
                       ),
@@ -137,6 +188,8 @@ class _AnonymousChatPageState extends State<AnonymousChatPage> {
                     final text = _controller.text.trim();
                     if (text.isEmpty) return;
 
+                    final flagged = _containsBadWords(text);
+
                     await FirebaseFirestore.instance
                         .collection('chat_rooms')
                         .doc(widget.roomId)
@@ -145,6 +198,8 @@ class _AnonymousChatPageState extends State<AnonymousChatPage> {
                       'text': text,
                       'alias': widget.alias,
                       'sentAt': Timestamp.now(),
+                      'flagged': flagged,
+                      'reports': 0,
                     });
 
                     _controller.clear();
