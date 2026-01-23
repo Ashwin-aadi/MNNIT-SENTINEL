@@ -251,7 +251,7 @@ class GeoTaskHandler extends TaskHandler {
     }
   }
 
-  void _check(Position pos) {
+  void _check(Position pos) async {
     final distance = Geolocator.distanceBetween(
       pos.latitude,
       pos.longitude,
@@ -269,6 +269,10 @@ class GeoTaskHandler extends TaskHandler {
     _verified = false;
     _timer?.cancel();
     _eventTimestamp = DateTime.now().millisecondsSinceEpoch;
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('pending_status', status);
+    await prefs.setInt('pending_timestamp', _eventTimestamp!);
 
     FlutterForegroundTask.sendDataToMain({
       'type': 'STATUS',
@@ -305,8 +309,7 @@ class GeoTaskHandler extends TaskHandler {
             .update({
           'geofenceStatus': status,
           'geofenceVerified': false,
-          'geofenceUpdatedAt':
-          DateTime.now().toIso8601String(),
+          'geofenceUpdatedAt': DateTime.now().toIso8601String(),
         });
 
         FlutterForegroundTask.updateService(

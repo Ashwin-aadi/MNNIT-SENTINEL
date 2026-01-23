@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'home_dashboard_page.dart';
 import 'welcome_page.dart';
@@ -11,9 +11,13 @@ import 'main.dart';
 class AuthGate extends StatelessWidget {
   const AuthGate({super.key});
 
-  Future<bool> _isOnboardingDone() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool('onboarding_done') ?? false;
+  Future<bool> _hasCompletedOnboarding(String uid) async {
+    final doc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .get();
+
+    return doc.exists;
   }
 
   @override
@@ -38,7 +42,7 @@ class AuthGate extends StatelessWidget {
         }
 
         return FutureBuilder<bool>(
-          future: _isOnboardingDone(),
+          future: _hasCompletedOnboarding(user.uid),
           builder: (context, snap) {
             if (!snap.hasData) {
               return const Scaffold(
