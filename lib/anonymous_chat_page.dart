@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:messmaker_fresh/moderation/bad_words.dart';
 
 class AnonymousChatPage extends StatefulWidget {
   final String roomId;
@@ -19,15 +20,8 @@ class _AnonymousChatPageState extends State<AnonymousChatPage> {
   late final TextEditingController _controller;
   late final ScrollController _scrollController;
 
-  final List<String> _badWords = [
-    'fuck',
-    'shit',
-    'bitch',
-    'asshole',
-    'slut',
-    'retard',
-    'bastard'
-  ];
+  /// ✅ Keeps track of messages THIS user has already reported
+  final Set<String> _reportedMessageIds = {};
 
   @override
   void initState() {
@@ -41,11 +35,6 @@ class _AnonymousChatPageState extends State<AnonymousChatPage> {
     _controller.dispose();
     _scrollController.dispose();
     super.dispose();
-  }
-
-  bool _containsBadWords(String text) {
-    final lower = text.toLowerCase();
-    return _badWords.any((w) => lower.contains(w));
   }
 
   void _scrollToBottom() {
@@ -68,6 +57,9 @@ class _AnonymousChatPageState extends State<AnonymousChatPage> {
       ),
       body: Column(
         children: [
+          // =========================
+          // MESSAGES
+          // =========================
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
@@ -84,9 +76,7 @@ class _AnonymousChatPageState extends State<AnonymousChatPage> {
                 final docs = snapshot.data!.docs;
 
                 if (docs.isEmpty) {
-                  return const Center(
-                    child: Text('No messages yet'),
-                  );
+                  return const Center(child: Text('No messages yet'));
                 }
 
                 _scrollToBottom();
@@ -99,8 +89,8 @@ class _AnonymousChatPageState extends State<AnonymousChatPage> {
                     final data = doc.data() as Map<String, dynamic>;
                     final isMe = data['alias'] == widget.alias;
 
-                    if (data['flagged'] == true &&
-                        (data['reports'] ?? 0) >= 3) {
+                    /// ✅ HIDE MESSAGE ONLY IF REPORTS >= 5
+                    if ((data['reports'] ?? 0) >= 5) {
                       return const Padding(
                         padding: EdgeInsets.all(8),
                         child: Text(
@@ -148,6 +138,19 @@ class _AnonymousChatPageState extends State<AnonymousChatPage> {
                                     color: Colors.red,
                                   ),
                                   onPressed: () async {
+                                    /// 🚫 Prevent reporting same message twice
+                                    if (_reportedMessageIds.contains(doc.id)) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                          content: Text(
+                                            'You have already reported this message',
+                                          ),
+                                        ),
+                                      );
+                                      return;
+                                    }
+
+                                    /// ✅ FIREBASE REPORTING LOGIC (UNCHANGED)
                                     await FirebaseFirestore.instance
                                         .collection('chat_rooms')
                                         .doc(widget.roomId)
@@ -157,6 +160,9 @@ class _AnonymousChatPageState extends State<AnonymousChatPage> {
                                       'reports': FieldValue.increment(1),
                                       'flagged': true,
                                     });
+
+                                    /// ✅ Mark as reported locally
+                                    _reportedMessageIds.add(doc.id);
                                   },
                                 ),
                               ],
@@ -170,6 +176,10 @@ class _AnonymousChatPageState extends State<AnonymousChatPage> {
               },
             ),
           ),
+
+          // =========================
+          // MESSAGE INPUT
+          // =========================
           Padding(
             padding: const EdgeInsets.all(8),
             child: Row(
@@ -188,8 +198,19 @@ class _AnonymousChatPageState extends State<AnonymousChatPage> {
                     final text = _controller.text.trim();
                     if (text.isEmpty) return;
 
-                    final flagged = _containsBadWords(text);
+                    /// 🚫 BLOCK BAD WORDS
+                    if (BadWords.containsBadWords(text)) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Message contains inappropriate language',
+                          ),
+                        ),
+                      );
+                      return;
+                    }
 
+                    /// ✅ FIREBASE SEND LOGIC (UNCHANGED)
                     await FirebaseFirestore.instance
                         .collection('chat_rooms')
                         .doc(widget.roomId)
@@ -198,7 +219,7 @@ class _AnonymousChatPageState extends State<AnonymousChatPage> {
                       'text': text,
                       'alias': widget.alias,
                       'sentAt': Timestamp.now(),
-                      'flagged': flagged,
+                      'flagged': false,
                       'reports': 0,
                     });
 

@@ -1,16 +1,29 @@
 class BadWords {
   static const List<String> words = [
     'fuck',
+    'Fuck',
+    'fcuk',
+    'fck',
+    'F',
+    'motherfucker',
+    'fucked',
+    'whore',
+    'bullshit',
+    'son of a bitch',
     'shit',
     'bitch',
     'asshole',
     'slut',
     'retard',
-    'bastard'
+    'bastard',
   ];
 
+  static final RegExp _badWordRegex = RegExp(
+    r'\b(' + words.join('|') + r')\b',
+    caseSensitive: false,
+  );
+
   static bool containsBadWords(String text) {
-    final lower = text.toLowerCase();
-    return words.any((w) => lower.contains(w));
+    return _badWordRegex.hasMatch(text);
   }
 }
