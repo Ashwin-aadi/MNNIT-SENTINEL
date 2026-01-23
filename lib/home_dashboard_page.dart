@@ -7,19 +7,15 @@ import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 
-import 'main.dart'; // HomePage (Entry Verification)
-import 'mess_menu_page.dart'; // ✅ FIXED FILE NAME
+import 'main.dart';
+import 'mess_menu_page.dart';
 import 'library_page.dart';
 import 'safe_page.dart';
 import 'attendance.dart';
 
-
 class HomeDashboardPage extends StatelessWidget {
   const HomeDashboardPage({super.key});
 
-  /// =======================
-  /// LOGOUT
-  /// =======================
   Future<void> _logout(BuildContext context) async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
 
@@ -40,9 +36,6 @@ class HomeDashboardPage extends StatelessWidget {
     await FirebaseAuth.instance.signOut();
   }
 
-  /// =======================
-  /// PICK & SAVE PHOTO LOCALLY
-  /// =======================
   Future<void> _pickAndSavePhoto(BuildContext context) async {
     final picker = ImagePicker();
     final picked = await picker.pickImage(
@@ -64,6 +57,20 @@ class HomeDashboardPage extends StatelessWidget {
         .update({
       'photoPath': savedImage.path,
     });
+  }
+
+  String _getGreeting() {
+    final hour = DateTime.now().hour;
+
+    if (hour >= 5 && hour < 12) {
+      return 'Good Morning';
+    } else if (hour >= 12 && hour < 17) {
+      return 'Good Afternoon';
+    } else if (hour >= 17 && hour < 21) {
+      return 'Good Evening';
+    } else {
+      return 'Good Night';
+    }
   }
 
   @override
@@ -128,10 +135,13 @@ class HomeDashboardPage extends StatelessWidget {
                         title: 'Attendance',
                         icon: Icons.check_circle,
                         color: Colors.blue.shade200,
-                        onTap: () {Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const AttendancePage()),
-                        );
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const AttendancePage(),
+                            ),
+                          );
                         },
                       ),
                     ],
@@ -151,7 +161,6 @@ class HomeDashboardPage extends StatelessWidget {
                         ),
                       );
                     },
-
                   ),
 
                   const SizedBox(height: 16),
@@ -177,10 +186,13 @@ class HomeDashboardPage extends StatelessWidget {
                         title: 'File Safe',
                         icon: Icons.lock,
                         color: Colors.purple.shade200,
-                        onTap: () {Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const SafePage()),
-                        );
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const SafePage(),
+                            ),
+                          );
                         },
                       ),
                     ],
@@ -194,9 +206,6 @@ class HomeDashboardPage extends StatelessWidget {
     );
   }
 
-  /// =======================
-  /// UI WIDGETS
-  /// =======================
   Widget _greeting(String name) {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -208,7 +217,7 @@ class HomeDashboardPage extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Good Morning, $name',
+            '${_getGreeting()}, $name',
             style: const TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
@@ -231,47 +240,98 @@ class HomeDashboardPage extends StatelessWidget {
     final photoPath = data['photoPath'];
 
     return Container(
-      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
         color: Colors.lightBlue.shade200,
-        borderRadius: BorderRadius.circular(20),
       ),
-      child: Row(
+      child: Column(
         children: [
-          GestureDetector(
-            onTap: onPhotoTap,
-            child: ClipOval(
-              child: Container(
-                width: 72,
-                height: 72,
-                color: Colors.grey.shade300,
-                child: photoPath != null && File(photoPath).existsSync()
-                    ? Image.file(File(photoPath), fit: BoxFit.cover)
-                    : const Icon(Icons.camera_alt, size: 30),
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+            decoration: const BoxDecoration(
+              color: Color(0xFF1B2A6B),
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(24),
+                topRight: Radius.circular(24),
               ),
             ),
+            child: Row(
+              children: [
+                const Icon(Icons.account_balance, color: Colors.white),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'Motilal Nehru National Institute of Technology Allahabad \n An Insitute of National Importance Declared by Act. of Parliament',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 8,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
-          const SizedBox(width: 16),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _idRow('Name', data['fullName']),
-              _idRow('Reg No', data['registrationNumber']),
-              _idRow('Programme', data['branch']),
-              _idRow('Section', data['section']),
-            ],
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                GestureDetector(
+                  onTap: onPhotoTap,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      width: 80,
+                      height: 80,
+                      color: Colors.grey.shade300,
+                      child: photoPath != null && File(photoPath).existsSync()
+                          ? Image.file(File(photoPath), fit: BoxFit.cover)
+                          : const Icon(Icons.person, size: 40),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'IDENTITY CARD',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          decoration: TextDecoration.underline,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      _idText('NAME', data['fullName']),
+                      _idText('Reg No.', data['registrationNumber']),
+                      _idText('Programme', data['branch']),
+                      _idText('Department', data['section']),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _idRow(String label, String value) {
+  Widget _idText(String label, String value) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
-      child: Text(
-        '$label: $value',
-        style: const TextStyle(fontWeight: FontWeight.w600),
+      child: RichText(
+        text: TextSpan(
+          style: const TextStyle(color: Colors.black, fontSize: 14),
+          children: [
+            TextSpan(
+              text: '$label ',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            TextSpan(text: value),
+          ],
+        ),
       ),
     );
   }
