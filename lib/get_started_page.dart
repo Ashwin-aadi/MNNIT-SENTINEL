@@ -17,11 +17,11 @@ class _GetStartedPageState extends State<GetStartedPage> {
 
   final _nameController = TextEditingController();
   final _regController = TextEditingController();
-  final _sectionController = TextEditingController();
 
   String? _gender;
   String? _branch;
   String? _semester;
+  String? _section;
 
   bool _loading = false;
 
@@ -31,14 +31,17 @@ class _GetStartedPageState extends State<GetStartedPage> {
   void dispose() {
     _nameController.dispose();
     _regController.dispose();
-    _sectionController.dispose();
     super.dispose();
   }
 
   Future<void> _submit() async {
+    if (_loading) return;
     if (!_formKey.currentState!.validate()) return;
 
-    if (_gender == null || _branch == null || _semester == null) {
+    if (_gender == null ||
+        _branch == null ||
+        _semester == null ||
+        _section == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please fill all fields')),
       );
@@ -47,16 +50,22 @@ class _GetStartedPageState extends State<GetStartedPage> {
 
     setState(() => _loading = true);
 
-    await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-      'fullName': _nameController.text.trim(),
-      'email': user.email,
-      'registrationNumber': _regController.text.trim(),
-      'gender': _gender,
-      'branch': _branch,
-      'semester': _semester,
-      'section': _sectionController.text.trim(),
-      'createdAt': FieldValue.serverTimestamp(),
-    });
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .set(
+      {
+        'fullName': _nameController.text.trim(),
+        'email': user.email,
+        'registrationNumber': _regController.text.trim(),
+        'gender': _gender,
+        'branch': _branch,
+        'semester': _semester,
+        'section': _section, // A1, A2, B1, B2, C1, C2, E1, E2
+        'createdAt': FieldValue.serverTimestamp(),
+      },
+      SetOptions(merge: true), // IMPORTANT
+    );
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('onboarding_done', true);
@@ -111,7 +120,17 @@ class _GetStartedPageState extends State<GetStartedPage> {
                 onChanged: (v) => setState(() => _semester = v),
               ),
 
-              _field(_sectionController, 'Section'),
+              _dropdown(
+                hint: 'Section',
+                value: _section,
+                items: const [
+                  'A1', 'A2',
+                  'B1', 'B2',
+                  'C1', 'C2',
+                  'E1', 'E2',
+                ],
+                onChanged: (v) => setState(() => _section = v),
+              ),
 
               const SizedBox(height: 24),
 
