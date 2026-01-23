@@ -181,29 +181,66 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Entry Verification'),
-      ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            ValueListenableBuilder<String>(
-              valueListenable: geofenceStatus,
-              builder: (_, value, __) => Text(
-                value,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Color(0xFF0F2027), Color(0xFF203A43), Color(0xFF2C5364)],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
+        ),
+        child: Center(
+          child: Card(
+            elevation: 14,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(24),
+            ),
+            margin: const EdgeInsets.symmetric(horizontal: 24),
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.location_on,
+                      size: 64, color: Colors.blue),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Entry Verification',
+                    style:
+                    TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 12),
+                  ValueListenableBuilder<String>(
+                    valueListenable: geofenceStatus,
+                    builder: (_, value, __) => Text(
+                      value,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 28),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      icon: const Icon(Icons.face),
+                      label: const Text('Scan Face ID & Register'),
+                      onPressed: _verifyFace,
+                      style: ElevatedButton.styleFrom(
+                        padding:
+                        const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: _verifyFace,
-              child: const Text('Scan Face ID & Register'),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -310,6 +347,12 @@ class GeoTaskHandler extends TaskHandler {
           'geofenceStatus': status,
           'geofenceVerified': false,
           'geofenceUpdatedAt': DateTime.now().toIso8601String(),
+          'geofenceFailures': FieldValue.arrayUnion([
+            {
+              'status': status,
+              'failedAt': DateTime.now().toIso8601String(),
+            }
+          ]),
         });
 
         FlutterForegroundTask.updateService(
