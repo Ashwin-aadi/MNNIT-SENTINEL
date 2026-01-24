@@ -83,7 +83,8 @@ class _AttendancePageState extends State<AttendancePage> {
 
   Future<void> _startGeofence() async {
     final uid = FirebaseAuth.instance.currentUser!.uid;
-    final snap = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+    final snap =
+    await FirebaseFirestore.instance.collection('users').doc(uid).get();
     final data = snap.data()!;
     await ClassGeofenceService.start(
       section: data['section'],
@@ -152,7 +153,8 @@ class _AttendancePageState extends State<AttendancePage> {
     return Scaffold(
       appBar: AppBar(title: const Text("Attendance")),
       body: StreamBuilder<DocumentSnapshot>(
-        stream: FirebaseFirestore.instance.collection('users').doc(uid).snapshots(),
+        stream:
+        FirebaseFirestore.instance.collection('users').doc(uid).snapshots(),
         builder: (context, userSnap) {
           if (!userSnap.hasData) {
             return const Center(child: CircularProgressIndicator());
@@ -168,8 +170,10 @@ class _AttendancePageState extends State<AttendancePage> {
 
           final today = _today();
           final schedule = AttendancePage.evenData[section]?[today] ?? [];
-          final ongoing = schedule.where((c) => _isTimeBetween(c['time']!)).toList();
-          final upcoming = schedule.where((c) => _isUpcoming(c['time']!)).toList();
+          final ongoing =
+          schedule.where((c) => _isTimeBetween(c['time']!)).toList();
+          final upcoming =
+          schedule.where((c) => _isUpcoming(c['time']!)).toList();
           final subjectCodes = _extractSubjectCodesForSection(section);
 
           return StreamBuilder<QuerySnapshot>(
@@ -200,44 +204,80 @@ class _AttendancePageState extends State<AttendancePage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     ValueListenableBuilder<bool>(
-                      valueListenable: ClassGeofenceService.isInsideClass,
+                      valueListenable:
+                      ClassGeofenceService.isInsideClass,
                       builder: (_, inside, __) {
                         return ValueListenableBuilder<int>(
-                          valueListenable: ClassGeofenceService.minutesInsideClass,
+                          valueListenable:
+                          ClassGeofenceService.minutesInsideClass,
                           builder: (_, minutes, __) {
-                            return Container(
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                color: inside ? Colors.green.shade100 : Colors.red.shade100,
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        inside ? "Inside Class" : "Outside Class",
-                                        style: const TextStyle(fontWeight: FontWeight.bold),
+                            return ValueListenableBuilder<int>(
+                              valueListenable: ClassGeofenceService
+                                  .verificationSecondsLeft,
+                              builder: (_, seconds, __) {
+                                return ValueListenableBuilder<bool>(
+                                  valueListenable: ClassGeofenceService
+                                      .isMarkedAbsent,
+                                  builder: (_, absent, __) {
+                                    return Container(
+                                      padding: const EdgeInsets.all(16),
+                                      decoration: BoxDecoration(
+                                        color: absent
+                                            ? Colors.grey.shade300
+                                            : inside
+                                            ? Colors.green.shade100
+                                            : Colors.red.shade100,
+                                        borderRadius:
+                                        BorderRadius.circular(16),
                                       ),
-                                      const SizedBox(height: 4),
-                                      inside
-                                          ? Text("Minutes inside: $minutes / 50")
-                                          : const Text("Enter class to start timer"),
-                                    ],
-                                  ),
-                                  ElevatedButton(
-                                    onPressed: () async {
-                                      final msg = await ClassGeofenceService.markMePresent();
-                                      if (!mounted) return;
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(SnackBar(content: Text(msg)));
-                                    },
-                                    child: const Text("Mark Me Present"),
-                                  ),
-                                ],
-                              ),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            absent
+                                                ? "Marked Absent"
+                                                : inside
+                                                ? "Inside Class"
+                                                : "Outside Class",
+                                            style: const TextStyle(
+                                                fontWeight:
+                                                FontWeight.bold),
+                                          ),
+                                          const SizedBox(height: 6),
+                                          if (!absent && inside)
+                                            Text(
+                                                "Minutes inside: $minutes / 50"),
+                                          if (!absent &&
+                                              inside &&
+                                              seconds > 0)
+                                            Text(
+                                                "Verify within: $seconds sec"),
+                                          const SizedBox(height: 8),
+                                          ElevatedButton(
+                                            onPressed: absent
+                                                ? null
+                                                : () async {
+                                              final msg =
+                                              await ClassGeofenceService
+                                                  .markMePresent();
+                                              if (!mounted) return;
+                                              ScaffoldMessenger.of(
+                                                  context)
+                                                  .showSnackBar(
+                                                  SnackBar(
+                                                      content: Text(
+                                                          msg)));
+                                            },
+                                            child: const Text(
+                                                "Mark Me Present"),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  },
+                                );
+                              },
                             );
                           },
                         );
@@ -248,10 +288,14 @@ class _AttendancePageState extends State<AttendancePage> {
                       onTap: () {
                         showModalBottomSheet(
                           context: context,
-                          shape: const RoundedRectangleBorder(
-                            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                          shape:
+                          const RoundedRectangleBorder(
+                            borderRadius:
+                            BorderRadius.vertical(
+                                top: Radius.circular(20)),
                           ),
-                          builder: (_) => _UpcomingSheet(upcoming: upcoming),
+                          builder: (_) =>
+                              _UpcomingSheet(upcoming: upcoming),
                         );
                       },
                       child: Container(
@@ -261,11 +305,15 @@ class _AttendancePageState extends State<AttendancePage> {
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                          crossAxisAlignment:
+                          CrossAxisAlignment.start,
                           children: [
                             Text(
-                              ongoing.isNotEmpty ? "Ongoing Class" : "Next Class",
-                              style: const TextStyle(fontWeight: FontWeight.bold),
+                              ongoing.isNotEmpty
+                                  ? "Ongoing Class"
+                                  : "Next Class",
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold),
                             ),
                             const SizedBox(height: 8),
                             if (ongoing.isNotEmpty)
@@ -273,7 +321,8 @@ class _AttendancePageState extends State<AttendancePage> {
                             else if (upcoming.isNotEmpty)
                               _classTile(upcoming.first)
                             else
-                              const Text("No classes remaining today"),
+                              const Text(
+                                  "No classes remaining today"),
                           ],
                         ),
                       ),
@@ -281,25 +330,33 @@ class _AttendancePageState extends State<AttendancePage> {
                     const SizedBox(height: 24),
                     const Text(
                       "Subject-wise Attendance",
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 12),
                     ...subjectCodes.map((code) {
                       final record = attendanceMap[code];
                       final attended = record?['attended'] ?? 0;
                       final total = record?['total'] ?? 0;
-                      final percent = total == 0 ? 0 : ((attended / total) * 100).round();
+                      final percent = total == 0
+                          ? 0
+                          : ((attended / total) * 100).round();
 
                       return Card(
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius:
+                          BorderRadius.circular(16),
                         ),
                         child: ListTile(
                           title: Text(code),
-                          subtitle: Text("Attended $attended / $total classes"),
+                          subtitle: Text(
+                              "Attended $attended / $total classes"),
                           trailing: Text(
                             "$percent%",
-                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                            style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold),
                           ),
                         ),
                       );
@@ -318,7 +375,9 @@ class _AttendancePageState extends State<AttendancePage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(c['subject']!, style: const TextStyle(fontWeight: FontWeight.bold)),
+        Text(c['subject']!,
+            style:
+            const TextStyle(fontWeight: FontWeight.bold)),
         const SizedBox(height: 4),
         Text("${c['time']} • ${c['room']}"),
       ],
@@ -343,7 +402,8 @@ class _UpcomingSheet extends StatelessWidget {
               (c) => Card(
             child: ListTile(
               title: Text(c['subject']!),
-              subtitle: Text("${c['time']} • ${c['room']}"),
+              subtitle:
+              Text("${c['time']} • ${c['room']}"),
             ),
           ),
         )
