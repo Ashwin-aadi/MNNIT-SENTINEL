@@ -21,11 +21,11 @@ class _SignInPageState extends State<SignInPage> {
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
-      // ✅ THIS IS THE KEY LINE
+      // THIS IS THE KEY LINE
       if (mounted) {
         Navigator.of(context).pop();
       }
-      // ✅ DO NOTHING ELSE
+      // DO NOTHING ELSE
       // AuthGate will auto-redirect
 
     } on FirebaseAuthException catch (e) {
