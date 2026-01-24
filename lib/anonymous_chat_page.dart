@@ -20,7 +20,7 @@ class _AnonymousChatPageState extends State<AnonymousChatPage> {
   late final TextEditingController _controller;
   late final ScrollController _scrollController;
 
-  /// ✅ Keeps track of messages THIS user has already reported
+  
   final Set<String> _reportedMessageIds = {};
 
   @override
@@ -89,7 +89,7 @@ class _AnonymousChatPageState extends State<AnonymousChatPage> {
                     final data = doc.data() as Map<String, dynamic>;
                     final isMe = data['alias'] == widget.alias;
 
-                    /// ✅ HIDE MESSAGE ONLY IF REPORTS >= 5
+                    ///  HIDE MESSAGE ONLY IF REPORTS >= 5
                     if ((data['reports'] ?? 0) >= 5) {
                       return const Padding(
                         padding: EdgeInsets.all(8),
@@ -150,7 +150,7 @@ class _AnonymousChatPageState extends State<AnonymousChatPage> {
                                       return;
                                     }
 
-                                    /// ✅ FIREBASE REPORTING LOGIC (UNCHANGED)
+                                    ///  FIREBASE REPORTING LOGIC (UNCHANGED)
                                     await FirebaseFirestore.instance
                                         .collection('chat_rooms')
                                         .doc(widget.roomId)
@@ -161,7 +161,7 @@ class _AnonymousChatPageState extends State<AnonymousChatPage> {
                                       'flagged': true,
                                     });
 
-                                    /// ✅ Mark as reported locally
+                                    ///  Mark as reported locally
                                     _reportedMessageIds.add(doc.id);
                                   },
                                 ),
@@ -210,7 +210,7 @@ class _AnonymousChatPageState extends State<AnonymousChatPage> {
                       return;
                     }
 
-                    /// ✅ FIREBASE SEND LOGIC (UNCHANGED)
+                    ///  FIREBASE SEND LOGIC (UNCHANGED)
                     await FirebaseFirestore.instance
                         .collection('chat_rooms')
                         .doc(widget.roomId)
