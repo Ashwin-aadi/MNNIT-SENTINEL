@@ -15,7 +15,7 @@ class _SignUpPageState extends State<SignUpPage> {
   String? _error;
   bool _loading = false;
 
-  /// 🔒 Restrict to mnnit.ac.in
+  ///  Restrict to mnnit.ac.in
   bool _isValidMnnitEmail(String email) {
     return RegExp(r'^[a-zA-Z0-9._%+-]+@mnnit\.ac\.in$')
         .hasMatch(email.trim());
@@ -47,7 +47,7 @@ class _SignUpPageState extends State<SignUpPage> {
         password: password,
       );
 
-      /// ✅ SEND VERIFICATION EMAIL
+      ///  SEND VERIFICATION EMAIL
       await cred.user!.sendEmailVerification();
 
       /// Move user to "Check your email" page
