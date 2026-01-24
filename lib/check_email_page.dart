@@ -25,7 +25,7 @@ class _CheckEmailPageState extends State<CheckEmailPage> {
     final refreshedUser = FirebaseAuth.instance.currentUser;
 
     if (refreshedUser != null && refreshedUser.emailVerified) {
-      /// ✅ VERIFIED → GetStarted
+      ///  VERIFIED → GetStarted
       Navigator.pushReplacementNamed(context, '/get-started');
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
