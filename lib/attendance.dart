@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'class_geofence_service.dart';
 
-class AttendancePage extends StatelessWidget {
+class AttendancePage extends StatefulWidget {
   const AttendancePage({super.key});
 
   static const Map<String, String> subjectNameToCode = {
@@ -35,7 +36,7 @@ class AttendancePage extends StatelessWidget {
         {"time": "16:00-17:00", "subject": "HSN12600(L)A", "room": "NLH2"}
       ],
       "Saturday": [
-        {"time": "09:00-10:00", "subject": "MAN12104(L)A", "room": "GS5"},
+        {"time": "08:38-9:38", "subject": "MAN12104(L)A", "room": "GS5"},
         {"time": "11:00-12:00", "subject": "HSN12600(P)A2", "room": "Lab"},
         {"time": "14:00-15:00", "subject": "IDN12600(L)A", "room": "NLH1"}
       ]
@@ -64,11 +65,30 @@ class AttendancePage extends StatelessWidget {
         {"time": "10:00-11:00", "subject": "HSN12600(L)B", "room": "GS8"},
         {"time": "11:00-12:00", "subject": "IDN12600(L)B", "room": "NLH1"}
       ]
-    },
+    }
   };
 
-  String _normalizeSection(String section) {
-    return section.isNotEmpty ? section[0] : section;
+  @override
+  State<AttendancePage> createState() => _AttendancePageState();
+}
+
+class _AttendancePageState extends State<AttendancePage> {
+  String _normalizeSection(String s) => s.isNotEmpty ? s[0] : s;
+
+  @override
+  void initState() {
+    super.initState();
+    _startGeofence();
+  }
+
+  Future<void> _startGeofence() async {
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+    final snap = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+    final data = snap.data()!;
+    await ClassGeofenceService.start(
+      section: data['section'],
+      semester: data['semester'],
+    );
   }
 
   String _today() {
@@ -110,19 +130,15 @@ class AttendancePage extends StatelessWidget {
   List<String> _extractSubjectCodesForSection(String section) {
     final normalized = _normalizeSection(section);
     final set = <String>{};
-
-    final data = evenData[normalized];
+    final data = AttendancePage.evenData[normalized];
     if (data == null) return [];
-
     for (final day in data.values) {
       for (final cls in day) {
         final raw = cls['subject']!;
         final parts = raw.split("/");
         for (final p in parts) {
           final code = RegExp(r'[A-Z]{3}\d{5}').firstMatch(p);
-          if (code != null) {
-            set.add(code.group(0)!);
-          }
+          if (code != null) set.add(code.group(0)!);
         }
       }
     }
@@ -151,11 +167,9 @@ class AttendancePage extends StatelessWidget {
           }
 
           final today = _today();
-          final schedule = evenData[section]?[today] ?? [];
-
+          final schedule = AttendancePage.evenData[section]?[today] ?? [];
           final ongoing = schedule.where((c) => _isTimeBetween(c['time']!)).toList();
           final upcoming = schedule.where((c) => _isUpcoming(c['time']!)).toList();
-
           final subjectCodes = _extractSubjectCodesForSection(section);
 
           return StreamBuilder<QuerySnapshot>(
@@ -185,6 +199,51 @@ class AttendancePage extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    ValueListenableBuilder<bool>(
+                      valueListenable: ClassGeofenceService.isInsideClass,
+                      builder: (_, inside, __) {
+                        return ValueListenableBuilder<int>(
+                          valueListenable: ClassGeofenceService.minutesInsideClass,
+                          builder: (_, minutes, __) {
+                            return Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: inside ? Colors.green.shade100 : Colors.red.shade100,
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        inside ? "Inside Class" : "Outside Class",
+                                        style: const TextStyle(fontWeight: FontWeight.bold),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      inside
+                                          ? Text("Minutes inside: $minutes / 50")
+                                          : const Text("Enter class to start timer"),
+                                    ],
+                                  ),
+                                  ElevatedButton(
+                                    onPressed: () async {
+                                      final msg = await ClassGeofenceService.markMePresent();
+                                      if (!mounted) return;
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(SnackBar(content: Text(msg)));
+                                    },
+                                    child: const Text("Mark Me Present"),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 24),
                     GestureDetector(
                       onTap: () {
                         showModalBottomSheet(
