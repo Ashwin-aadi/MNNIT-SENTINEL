@@ -8,47 +8,63 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'attendance.dart';
 
 class ClassGeofenceService {
-  // --------------------------------------------------
-  // PUBLIC STATE (USED BY UI)
-  // --------------------------------------------------
-
   static final ValueNotifier<bool> isInsideClass =
   ValueNotifier<bool>(false);
 
   static final ValueNotifier<int> minutesInsideClass =
   ValueNotifier<int>(0);
 
-  static Map<String, String>? activeClass;
+  static final ValueNotifier<int> verificationSecondsLeft =
+  ValueNotifier<int>(0);
 
-  // --------------------------------------------------
-  // NOTIFICATIONS
-  // --------------------------------------------------
+  static final ValueNotifier<bool> isVerifiedForThisClass =
+  ValueNotifier<bool>(false);
+
+  static Map<String, String>? activeClass;
 
   static final FlutterLocalNotificationsPlugin _notifications =
   FlutterLocalNotificationsPlugin();
 
   static bool _notificationsReady = false;
 
+  static final LocalAuthentication _auth = LocalAuthentication();
+
+  static StreamSubscription<Position>? _posSub;
+  static Timer? _verifyTimer;
+  static Timer? _minuteTimer;
+
+  static bool _inside = false;
+  static DateTime? _insideSince;
+
+  static const int requiredMinutes = 50;
+  static const int verifyWindowSeconds = 30;
+
+  static const Map<String, Map<String, double>> classroomGeofences = {
+    "GS4": {"lat": 25.4904908, "lng": 81.8632980, "radius": 10},
+    "GS5": {"lat": 25.4904910, "lng": 81.8632990, "radius": 10},
+    "GS8": {"lat": 25.4904920, "lng": 81.8633000, "radius": 10},
+    "NLH1": {"lat": 25.4904930, "lng": 81.8633010, "radius": 10},
+    "NLH2": {"lat": 25.4904940, "lng": 81.8633020, "radius": 10},
+    "CCTF Lab": {"lat": 25.4904950, "lng": 81.8633030, "radius": 10},
+    "Lab": {"lat": 25.4904960, "lng": 81.8633040, "radius": 10},
+  };
+
   static Future<void> initNotifications() async {
     if (_notificationsReady) return;
-
     const android = AndroidInitializationSettings('@mipmap/ic_launcher');
     const settings = InitializationSettings(android: android);
     await _notifications.initialize(settings);
-
     _notificationsReady = true;
   }
 
   static Future<void> _notify(String title, String body) async {
     await initNotifications();
-
     const androidDetails = AndroidNotificationDetails(
       'class_geofence',
       'Class Attendance',
       importance: Importance.high,
       priority: Priority.high,
     );
-
     await _notifications.show(
       1001,
       title,
@@ -56,63 +72,6 @@ class ClassGeofenceService {
       const NotificationDetails(android: androidDetails),
     );
   }
-
-  // --------------------------------------------------
-  // BIOMETRIC AUTH
-  // --------------------------------------------------
-
-  static final LocalAuthentication _auth = LocalAuthentication();
-  static bool _biometricVerified = false;
-
-  static Future<bool> _authenticate() async {
-    try {
-      final ok = await _auth.authenticate(
-        localizedReason: 'Confirm your presence in class',
-        options: const AuthenticationOptions(
-          biometricOnly: true,
-          stickyAuth: true,
-        ),
-      );
-
-      await _log(
-        ok ? 'BIOMETRIC_OK' : 'BIOMETRIC_FAIL',
-        ok ? 'Fingerprint verified' : 'Fingerprint failed',
-      );
-
-      return ok;
-    } catch (e) {
-      await _log('BIOMETRIC_ERROR', e.toString());
-      return false;
-    }
-  }
-
-  // --------------------------------------------------
-  // TEST COORDINATES (CHANGE LATER)
-  // --------------------------------------------------
-
-  static const double gsLat = 25.4904908;
-  static const double gsLng = 81.8632980;
-  static const double gsRadius = 10.0;
-
-  static const double labLat = 25.4904908;
-  static const double labLng = 81.8632980;
-  static const double labRadius = 10.0;
-
-  static const double nlhLat = 25.4904908;
-  static const double nlhLng = 81.8632980;
-  static const double nlhRadius = 10.0;
-
-  // --------------------------------------------------
-  // INTERNAL STATE
-  // --------------------------------------------------
-
-  static StreamSubscription<Position>? _posSub;
-  static bool _inside = false;
-  static DateTime? _insideSince;
-
-  // --------------------------------------------------
-  // START TRACKING (CALLED FROM AttendancePage)
-  // --------------------------------------------------
 
   static Future<void> start({
     required String section,
@@ -128,18 +87,21 @@ class ClassGeofenceService {
     if (cls == null) return;
 
     activeClass = cls;
-    _biometricVerified = false;
+    isInsideClass.value = false;
+    minutesInsideClass.value = 0;
+    verificationSecondsLeft.value = 0;
+    isVerifiedForThisClass.value = false;
     _inside = false;
     _insideSince = null;
-    minutesInsideClass.value = 0;
-    isInsideClass.value = false;
 
     final geo = _resolveGeofence(cls['room']!);
+    if (geo == null) return;
 
     _posSub?.cancel();
     _posSub = Geolocator.getPositionStream(
-      locationSettings:
-      const LocationSettings(accuracy: LocationAccuracy.high),
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.high,
+      ),
     ).listen((pos) async {
       final distance = Geolocator.distanceBetween(
         pos.latitude,
@@ -157,11 +119,33 @@ class ClassGeofenceService {
         minutesInsideClass.value = 0;
 
         await _notify(
-          'Inside Class',
-          'You are inside ${cls['subject']}',
+          'Verify Entry',
+          'Verify fingerprint within 30 seconds',
         );
 
-        await _log('ENTER', 'Entered class geofence');
+        verificationSecondsLeft.value = verifyWindowSeconds;
+
+        _verifyTimer?.cancel();
+        _verifyTimer = Timer.periodic(
+          const Duration(seconds: 1),
+              (t) {
+            verificationSecondsLeft.value--;
+            if (verificationSecondsLeft.value <= 0) {
+              t.cancel();
+            }
+          },
+        );
+
+        _minuteTimer?.cancel();
+        _minuteTimer = Timer.periodic(
+          const Duration(minutes: 1),
+              (_) {
+            if (_insideSince != null) {
+              minutesInsideClass.value =
+                  DateTime.now().difference(_insideSince!).inMinutes;
+            }
+          },
+        );
       }
 
       if (!nowInside && _inside) {
@@ -169,69 +153,69 @@ class ClassGeofenceService {
         isInsideClass.value = false;
         _insideSince = null;
         minutesInsideClass.value = 0;
+        verificationSecondsLeft.value = 0;
+        isVerifiedForThisClass.value = false;
+
+        _verifyTimer?.cancel();
+        _minuteTimer?.cancel();
 
         await _notify(
-          'Outside Class',
+          'Exited Class',
           'You left ${cls['subject']}',
         );
-
-        await _log('EXIT', 'Exited class geofence');
-      }
-
-      if (_inside && _insideSince != null) {
-        minutesInsideClass.value =
-            DateTime.now().difference(_insideSince!).inMinutes;
       }
     });
   }
 
-  // --------------------------------------------------
-  // MANUAL ATTENDANCE (BUTTON)
-  // --------------------------------------------------
-
   static Future<String> markMePresent() async {
-    if (activeClass == null) {
-      return 'No active class';
-    }
+    if (activeClass == null) return 'No active class';
 
     if (!isInsideClass.value) {
-      await _log(
-        'ATTENDANCE_BLOCKED',
-        'User tried outside class',
-      );
       return 'You are outside the class';
     }
 
-    if (!_biometricVerified) {
-      final ok = await _authenticate();
+    if (!isVerifiedForThisClass.value) {
+      if (verificationSecondsLeft.value <= 0) {
+        return 'Verification window expired';
+      }
+
+      final ok = await _auth.authenticate(
+        localizedReason: 'Verify entry to class',
+        options: const AuthenticationOptions(
+          biometricOnly: true,
+          stickyAuth: true,
+        ),
+      );
+
       if (!ok) return 'Fingerprint verification failed';
-      _biometricVerified = true;
+
+      isVerifiedForThisClass.value = true;
+      verificationSecondsLeft.value = 0;
+      _verifyTimer?.cancel();
+    }
+
+    if (minutesInsideClass.value < requiredMinutes) {
+      return 'Stay ${requiredMinutes - minutesInsideClass.value} more minutes';
     }
 
     await _markAttendance();
+
     await _notify(
       'Attendance Marked',
       '${activeClass!['subject']} recorded',
     );
 
-    await _log(
-      'ATTENDANCE_MARKED',
-      'Attendance marked manually',
-    );
-
     return 'Attendance marked successfully';
   }
-
-  // --------------------------------------------------
-  // ATTENDANCE WRITE
-  // --------------------------------------------------
 
   static Future<void> _markAttendance() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null || activeClass == null) return;
 
     final subjectCode =
-    _extractSubjectCode(activeClass!['subject']!);
+    RegExp(r'[A-Z]{3}\d{5}').firstMatch(activeClass!['subject']!)?.group(0);
+
+    if (subjectCode == null) return;
 
     final today =
         "${DateTime.now().year}-${DateTime.now().month}-${DateTime.now().day}";
@@ -254,53 +238,14 @@ class ClassGeofenceService {
     }, SetOptions(merge: true));
   }
 
-  static String _extractSubjectCode(String subject) {
-    final match = RegExp(r'[A-Z]{3}\d{5}').firstMatch(subject);
-    return match?.group(0) ?? subject;
-  }
-
-  // --------------------------------------------------
-  // LOGGING
-  // --------------------------------------------------
-
-  static Future<void> _log(String type, String details) async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null || activeClass == null) return;
-
-    await FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
-        .collection('attendance_logs')
-        .add({
-      'type': type,
-      'subject': activeClass!['subject'],
-      'room': activeClass!['room'],
-      'details': details,
-      'timestamp': FieldValue.serverTimestamp(),
-    });
-  }
-
-  // --------------------------------------------------
-  // GEOFENCE RESOLUTION
-  // --------------------------------------------------
-
-  static Map<String, double> _resolveGeofence(String room) {
-    final r = room.toLowerCase();
-
-    if (r.contains('lab')) {
-      return {'lat': labLat, 'lng': labLng, 'radius': labRadius};
+  static Map<String, double>? _resolveGeofence(String room) {
+    for (final entry in classroomGeofences.entries) {
+      if (room.contains(entry.key)) {
+        return entry.value;
+      }
     }
-
-    if (r.contains('gs')) {
-      return {'lat': gsLat, 'lng': gsLng, 'radius': gsRadius};
-    }
-
-    return {'lat': nlhLat, 'lng': nlhLng, 'radius': nlhRadius};
+    return null;
   }
-
-  // --------------------------------------------------
-  // CLASS RETURN FUNCTION
-  // --------------------------------------------------
 
   static Map<String, String>? getCurrentOrNextClass({
     required String section,
@@ -309,11 +254,17 @@ class ClassGeofenceService {
     if (semester != "2") return null;
 
     final normalized = section.substring(0, 1).toUpperCase();
-    final today = _today();
+    final today = [
+      "Monday",
+      "Tuesday",
+      "Wednesday",
+      "Thursday",
+      "Friday",
+      "Saturday",
+      "Sunday"
+    ][DateTime.now().weekday - 1];
 
-    final schedule =
-    AttendancePage.evenData[normalized]?[today];
-
+    final schedule = AttendancePage.evenData[normalized]?[today];
     if (schedule == null || schedule.isEmpty) return null;
 
     final now = TimeOfDay.now();
@@ -327,24 +278,10 @@ class ClassGeofenceService {
       final sMin = start.hour * 60 + start.minute;
       final eMin = end.hour * 60 + end.minute;
 
-      if (nowMin >= sMin && nowMin <= eMin) {
-        return c;
-      }
+      if (nowMin >= sMin && nowMin <= eMin) return c;
     }
 
     return schedule.first;
-  }
-
-  static String _today() {
-    return [
-      "Monday",
-      "Tuesday",
-      "Wednesday",
-      "Thursday",
-      "Friday",
-      "Saturday",
-      "Sunday"
-    ][DateTime.now().weekday - 1];
   }
 
   static TimeOfDay _parse(String t) {
