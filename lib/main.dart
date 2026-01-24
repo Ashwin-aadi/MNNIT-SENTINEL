@@ -1,17 +1,21 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:device_info_plus/device_info_plus.dart';
+import 'package:permission_handler/permission_handler.dart';
 
-/// =======================
-/// GLOBAL STATE (UI ISOLATE)
-/// =======================
+import 'signup_page.dart';
+import 'check_email_page.dart';
+import 'get_started_page.dart';
+import 'sign_in_page.dart';
+import 'auth_gate.dart';
+
 ValueNotifier<String> geofenceStatus =
 ValueNotifier<String>('Status: Unknown');
 
@@ -23,19 +27,45 @@ const int ALERT_TIMEOUT_SECONDS = 30;
 final FlutterLocalNotificationsPlugin _localNotifications =
 FlutterLocalNotificationsPlugin();
 
-/// =======================
-/// DEVICE ID
-/// =======================
-Future<String> getDeviceId() async {
-  final info = DeviceInfoPlugin();
-  final android = await info.androidInfo;
-  return android.id ?? 'unknown_device';
+Future<void> persistUid() async {
+  final user = FirebaseAuth.instance.currentUser;
+  if (user == null) return;
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setString('uid', user.uid);
 }
 
-/// =======================
-/// MAIN (UI ISOLATE)
-/// =======================
+Future<String?> getStoredUid() async {
+  final prefs = await SharedPreferences.getInstance();
+  return prefs.getString('uid');
+}
+
+Future<void> requestCorePermissions() async {
+  final location = await Permission.location.request();
+  if (!location.isGranted) return;
+
+  if (await Permission.locationAlways.isDenied) {
+    await Permission.locationAlways.request();
+  }
+
+  if (await Permission.notification.isDenied) {
+    await Permission.notification.request();
+  }
+}
+
 @pragma('vm:entry-point')
+Future<void> bootstrapAfterLogin() async {
+  await requestCorePermissions();
+  await persistUid();
+
+  if (!await FlutterForegroundTask.isRunningService) {
+    await FlutterForegroundTask.startService(
+      notificationTitle: 'Geofence Active',
+      notificationText: 'Monitoring location',
+      callback: _startCallback,
+    );
+  }
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
@@ -51,13 +81,10 @@ void main() async {
   FlutterForegroundTask.addTaskDataCallback((data) async {
     if (data is Map && data['type'] == 'STATUS') {
       final prefs = await SharedPreferences.getInstance();
-
       _pendingStatus = data['status'];
       _pendingTimestamp = data['timestamp'];
-
       await prefs.setString('pending_status', _pendingStatus!);
       await prefs.setInt('pending_timestamp', _pendingTimestamp!);
-
       geofenceStatus.value = _pendingStatus!;
     }
   });
@@ -84,23 +111,28 @@ void main() async {
   runApp(const MyApp());
 }
 
-/// =======================
-/// APP UI
-/// =======================
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
+    return MaterialApp(
+      title: 'MNNIT-SENTINEL',
       debugShowCheckedModeBanner: false,
-      home: HomePage(),
+      home: AuthGate(),
+      routes: {
+        '/signin': (_) => const SignInPage(),
+        '/signup': (_) => const SignUpPage(),
+        '/check-email': (_) => const CheckEmailPage(),
+        '/get-started': (_) => const GetStartedPage(),
+      },
     );
   }
 }
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
+
   @override
   State<HomePage> createState() => _HomePageState();
 }
@@ -121,47 +153,6 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Geofence App')),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            ValueListenableBuilder<String>(
-              valueListenable: geofenceStatus,
-              builder: (_, value, __) => Text(
-                value,
-                style: const TextStyle(
-                    fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-            ),
-            const SizedBox(height: 30),
-            ElevatedButton(
-              onPressed: _startService,
-              child: const Text('Start Geofence Service'),
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: _verifyFace,
-              child: const Text('Scan Face ID & Register'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _startService() async {
-    if (await FlutterForegroundTask.isRunningService) return;
-    await FlutterForegroundTask.startService(
-      notificationTitle: 'Geofence Active',
-      notificationText: 'Monitoring location',
-      callback: _startCallback,
-    );
-  }
-
   Future<void> _verifyFace() async {
     if (_pendingStatus == null) return;
 
@@ -175,41 +166,100 @@ class _HomePageState extends State<HomePage> {
     );
     if (!ok) return;
 
-    final deviceId = await getDeviceId();
+    final uid = FirebaseAuth.instance.currentUser!.uid;
 
-    await FirebaseFirestore.instance.collection('geofence_events').add({
-      'deviceId': deviceId,
-      'status': _pendingStatus,
-      'timestamp': FieldValue.serverTimestamp(),
-      'verified': true,
+    await FirebaseFirestore.instance.collection('users').doc(uid).update({
+      'geofenceStatus': _pendingStatus,
+      'geofenceVerified': true,
+      'geofenceUpdatedAt': DateTime.now().toIso8601String(),
     });
 
-    /// 🔥 STOP TIMER IN BACKGROUND
     FlutterForegroundTask.sendDataToTask({'type': 'VERIFIED'});
-
     geofenceStatus.value = 'Registered: $_pendingStatus';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Color(0xFF0F2027), Color(0xFF203A43), Color(0xFF2C5364)],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
+        ),
+        child: Center(
+          child: Card(
+            elevation: 14,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(24),
+            ),
+            margin: const EdgeInsets.symmetric(horizontal: 24),
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.location_on,
+                      size: 64, color: Colors.blue),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Entry Verification',
+                    style:
+                    TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 12),
+                  ValueListenableBuilder<String>(
+                    valueListenable: geofenceStatus,
+                    builder: (_, value, __) => Text(
+                      value,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 28),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      icon: const Icon(Icons.face),
+                      label: const Text('Scan Face ID & Register'),
+                      onPressed: _verifyFace,
+                      style: ElevatedButton.styleFrom(
+                        padding:
+                        const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 
-/// =======================
-/// BACKGROUND ENTRY
-/// =======================
 @pragma('vm:entry-point')
 void _startCallback() {
   FlutterForegroundTask.setTaskHandler(GeoTaskHandler());
 }
 
-/// =======================
-/// BACKGROUND HANDLER
-/// =======================
 class GeoTaskHandler extends TaskHandler {
   bool? _inside;
   Timer? _timer;
-  int _remaining = ALERT_TIMEOUT_SECONDS;
   bool _verified = false;
+  int? _eventTimestamp;
 
-  static const double lat = 26.1957202;
-  static const double lng = 78.1478179;
+  static const double lat = 25.4904908;
+  static const double lng = 81.8632980;
   static const double radius = 10.0;
 
   @override
@@ -231,8 +281,6 @@ class GeoTaskHandler extends TaskHandler {
     if (data is Map && data['type'] == 'VERIFIED') {
       _verified = true;
       _timer?.cancel();
-      _timer = null;
-
       FlutterForegroundTask.updateService(
         notificationTitle: 'Geofence Status',
         notificationText: 'Verified successfully',
@@ -240,7 +288,7 @@ class GeoTaskHandler extends TaskHandler {
     }
   }
 
-  void _check(Position pos) {
+  void _check(Position pos) async {
     final distance = Geolocator.distanceBetween(
       pos.latitude,
       pos.longitude,
@@ -257,43 +305,60 @@ class GeoTaskHandler extends TaskHandler {
 
     _verified = false;
     _timer?.cancel();
-    _remaining = ALERT_TIMEOUT_SECONDS;
+    _eventTimestamp = DateTime.now().millisecondsSinceEpoch;
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('pending_status', status);
+    await prefs.setInt('pending_timestamp', _eventTimestamp!);
 
     FlutterForegroundTask.sendDataToMain({
       'type': 'STATUS',
       'status': status,
-      'timestamp': DateTime.now().millisecondsSinceEpoch,
+      'timestamp': _eventTimestamp,
     });
 
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) async {
-      _remaining--;
-
       if (_verified) {
         timer.cancel();
         return;
       }
 
-      if (_remaining > 0) {
+      final elapsed =
+          (DateTime.now().millisecondsSinceEpoch -
+              _eventTimestamp!) ~/
+              1000;
+
+      if (elapsed < ALERT_TIMEOUT_SECONDS) {
         FlutterForegroundTask.updateService(
           notificationTitle: 'Geofence Status',
-          notificationText: '$status | Verify in $_remaining sec',
+          notificationText:
+          '$status | Verify in ${ALERT_TIMEOUT_SECONDS - elapsed}s',
         );
       } else {
         timer.cancel();
-        if (_verified) return;
+
+        final uid = await getStoredUid();
+        if (uid == null) return;
+
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(uid)
+            .update({
+          'geofenceStatus': status,
+          'geofenceVerified': false,
+          'geofenceUpdatedAt': DateTime.now().toIso8601String(),
+          'geofenceFailures': FieldValue.arrayUnion([
+            {
+              'status': status,
+              'failedAt': DateTime.now().toIso8601String(),
+            }
+          ]),
+        });
 
         FlutterForegroundTask.updateService(
           notificationTitle: 'Geofence Status',
           notificationText: 'Verification failed',
         );
-
-        final deviceId = await getDeviceId();
-        await FirebaseFirestore.instance.collection('alerts').add({
-          'deviceId': deviceId,
-          'status': status,
-          'timestamp': FieldValue.serverTimestamp(),
-          'verified': false,
-        });
       }
     });
   }
